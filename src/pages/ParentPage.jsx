@@ -219,11 +219,13 @@ export default function ParentPage() {
               const wrong = w.progress?.[0]?.wrong_count || 0;
               const total = correct + wrong;
               const accuracy = total > 0 ? correct / total : -1;
-              const hue = accuracy >= 0 ? Math.round(accuracy * 120) : 0;
-              const bgOpacity = total > 0 ? Math.min(0.12, 0.04 + (total / 40) * 0.08) : 0;
-              const cardStyle = total > 0
-                ? { background: `linear-gradient(135deg, hsla(${hue}, 75%, 55%, ${bgOpacity}) 0%, transparent 70%)` }
-                : {};
+              const hue = accuracy >= 0 ? Math.round(accuracy * 120) : 220;
+              const bgOpacity = total > 0
+                ? Math.min(0.15, 0.05 + (total / 30) * 0.1)
+                : 0.06;
+              const cardStyle = {
+                background: `linear-gradient(135deg, hsla(${hue}, 75%, 55%, ${bgOpacity}) 0%, transparent 70%)`
+              };
 
               return (
                 <div key={w.id} className="word-item" style={cardStyle}>
@@ -243,12 +245,16 @@ export default function ParentPage() {
                       {w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}
                     </span>
                   </div>
-                  {total > 0 && (
-                    <div className="word-stats-bar">
-                      <div className="word-stats-fill correct" style={{ width: `${accuracy * 100}%` }} />
-                      <div className="word-stats-fill wrong" style={{ width: `${(1 - accuracy) * 100}%` }} />
-                    </div>
-                  )}
+                  <div className="word-stats-bar">
+                    {total > 0 ? (
+                      <>
+                        <div className="word-stats-fill correct" style={{ width: `${accuracy * 100}%` }} />
+                        <div className="word-stats-fill wrong" style={{ width: `${(1 - accuracy) * 100}%` }} />
+                      </>
+                    ) : (
+                      <div className="word-stats-fill untested" style={{ width: '100%' }} />
+                    )}
+                  </div>
                   {expandedWords[w.id] && (
                     <div className="word-item-detail">
                       {total > 0 && (
