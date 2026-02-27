@@ -37,8 +37,23 @@ function makeOptions(correct, allWords, field) {
 function buildQuestions(words) {
   const questions = [];
   const valid = words.filter((w) => w.meanings?.length);
+  const pool = shuffle([...valid]);
 
-  for (const w of valid) {
+  // 随机抽一些词组成连连看（每组4个词算1题，剩余不足7个时停止）
+  while (pool.length >= 7 && Math.random() < 0.5) {
+    const mw = pool.splice(0, 4);
+    const pairs = mw.map((w) => ({
+      wordId: w.id, meaningId: w.meanings[0].id,
+      en: w.word, cn: primaryMeaning(w.meanings[0].meaning_cn),
+    }));
+    questions.push({
+      type: "match", pairs,
+      wordIds: mw.map((w) => w.id),
+      meaningIds: mw.map((w) => w.meanings[0].id),
+    });
+  }
+
+  for (const w of pool) {
     const m = w.meanings[0];
     const display_cn = primaryMeaning(m.meaning_cn);
     const type = ["cn2en", "en2cn", "spell"][Math.floor(Math.random() * 3)];
@@ -46,19 +61,6 @@ function buildQuestions(words) {
     if (type === "cn2en") q.options = makeOptions(w.word, words, "word");
     if (type === "en2cn") q.options = makeOptions(display_cn, words, "meaning_cn");
     questions.push(q);
-  }
-
-  if (valid.length >= 3) {
-    const matchWords = shuffle(valid).slice(0, Math.min(4, valid.length));
-    const pairs = matchWords.map((w) => ({
-      wordId: w.id, meaningId: w.meanings[0].id,
-      en: w.word, cn: primaryMeaning(w.meanings[0].meaning_cn),
-    }));
-    questions.push({
-      type: "match", pairs,
-      wordIds: matchWords.map((w) => w.id),
-      meaningIds: matchWords.map((w) => w.meanings[0].id),
-    });
   }
 
   return shuffle(questions);
@@ -164,7 +166,7 @@ export default function QuizPage() {
       const timer = setTimeout(() => playAudio(currentQ.word.word, 2), 300);
       return () => clearTimeout(timer);
     }
-  }, [qIdx, phase, loading, transitioning, currentQ]);
+  }, [qIdx, loading]);
 
   const handleAnswer = useCallback(async (answer) => {
     if (answered) return;
