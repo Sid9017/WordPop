@@ -84,8 +84,8 @@ export default function ParentPage() {
     let list = words;
     if (stageFilter !== "all") {
       list = list.filter((w) => {
-        const stage = w.progress?.[0]?.stage || "testing";
-        return stage === stageFilter;
+        const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
+        return (p?.stage || "testing") === stageFilter;
       });
     }
     if (search.trim()) {
@@ -101,7 +101,8 @@ export default function ParentPage() {
   const stageCounts = useMemo(() => {
     const counts = { all: words.length };
     for (const w of words) {
-      const stage = w.progress?.[0]?.stage || "testing";
+      const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
+      const stage = p?.stage || "testing";
       counts[stage] = (counts[stage] || 0) + 1;
     }
     return counts;
@@ -211,9 +212,10 @@ export default function ParentPage() {
           <>
           <div className="word-list">
             {filtered.slice(0, showCount).map((w) => {
-              const stage = w.progress?.[0]?.stage || "testing";
-              const correct = w.progress?.[0]?.correct_count || 0;
-              const wrong = w.progress?.[0]?.wrong_count || 0;
+              const prog = Array.isArray(w.progress) ? w.progress[0] : w.progress;
+              const stage = prog?.stage || "testing";
+              const correct = prog?.correct_count || 0;
+              const wrong = prog?.wrong_count || 0;
               const total = correct + wrong;
               const accuracy = total > 0 ? correct / total : -1;
               // 绿(120) → 黄(60) → 橙(30) → 红(0)
