@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio } from "../lib/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Confetti from "../components/Confetti";
@@ -165,11 +165,15 @@ export default function QuizPage() {
   }, [isExtra]);
 
   const currentQ = questions[qIdx];
+  const lastPlayedRef = useRef("");
 
   useEffect(() => {
     if (!questions.length || phase === "done" || transitioning) return;
     const q = questions[qIdx];
     if (!q || q.type === "match") return;
+    const key = `${qIdx}-${q.word.word}`;
+    if (lastPlayedRef.current === key) return;
+    lastPlayedRef.current = key;
     const timer = setTimeout(() => playAudio(q.word.word, 2), 300);
     return () => clearTimeout(timer);
   }, [questions, qIdx]);
