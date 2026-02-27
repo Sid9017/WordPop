@@ -276,6 +276,16 @@ export async function getCheckins(days = 30) {
   return (data || []).map((d) => d.check_date);
 }
 
+export async function clearQuizHistory() {
+  const familyId = getFamilyId();
+  await supabase.from("quiz_log").delete().eq("family_id", familyId);
+  await supabase
+    .from("progress")
+    .update({ correct_count: 0, wrong_count: 0, last_quiz_at: null, stage: "testing" })
+    .eq("family_id", familyId);
+  await supabase.from("checkins").delete().eq("family_id", familyId);
+}
+
 export async function getTodayQuizDone() {
   const familyId = getFamilyId();
   const todayStart = new Date();
