@@ -263,9 +263,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 .stats-correct { color: var(--success); font-weight: 600; }
 .stats-wrong { color: var(--danger); font-weight: 600; }
 
-.stage-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
-.stage-badge.testing { background: #dbeafe; color: #2563eb; }
-.stage-badge.mastered { background: var(--success-bg); color: #059669; }
+.stage-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; background: #dbeafe; color: #2563eb; }
 
 /* ===== Child Page ===== */
 .child-subtitle { color: var(--text-light); font-size: 14px; margin: 4px 0 20px; animation: fadeIn 0.5s ease; }

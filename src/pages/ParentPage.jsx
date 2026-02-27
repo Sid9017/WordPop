@@ -216,13 +216,24 @@ export default function ParentPage() {
               const wrong = w.progress?.[0]?.wrong_count || 0;
               const total = correct + wrong;
               const accuracy = total > 0 ? correct / total : -1;
+              // 绿(120) → 黄(60) → 橙(30) → 红(0)
               const hue = accuracy >= 0 ? Math.round(accuracy * 120) : 220;
               const bgOpacity = total > 0
-                ? Math.min(0.15, 0.05 + (total / 30) * 0.1)
-                : 0.06;
+                ? Math.min(0.18, 0.06 + (total / 20) * 0.12)
+                : 0.04;
               const cardStyle = {
-                background: `linear-gradient(135deg, hsla(${hue}, 75%, 55%, ${bgOpacity}) 0%, transparent 70%)`
+                background: total > 0
+                  ? `linear-gradient(135deg, hsla(${hue}, 80%, 55%, ${bgOpacity}) 0%, hsla(${hue}, 80%, 55%, ${bgOpacity * 0.3}) 50%, transparent 80%)`
+                  : `linear-gradient(135deg, hsla(220, 60%, 60%, 0.04) 0%, transparent 70%)`
               };
+
+              const accPct = total > 0 ? Math.round(accuracy * 100) : -1;
+              const badgeStyle = total > 0
+                ? { background: `hsla(${hue}, 75%, 55%, 0.15)`, color: `hsl(${hue}, 65%, 35%)` }
+                : {};
+              const badgeText = total > 0
+                ? (accPct === 100 ? "全对" : `错${Math.round((1 - accuracy) * 100)}%`)
+                : "待测试";
 
               return (
                 <div key={w.id} className="word-item" style={cardStyle}>
@@ -230,14 +241,9 @@ export default function ParentPage() {
                     <span className="word-item-arrow">{expandedWords[w.id] ? "▾" : "▸"}</span>
                     <strong className="word-item-word">{w.word}</strong>
                     <span className="phonetic">{w.phonetic}</span>
-                    <span className={`stage-badge ${stage}`}>
-                      {STAGE_LABELS[stage] || stage}
+                    <span className="stage-badge" style={badgeStyle}>
+                      {badgeText}
                     </span>
-                    {total > 0 && (
-                      <span className="word-item-acc" style={{ color: `hsl(${hue}, 65%, 40%)` }}>
-                        {Math.round(accuracy * 100)}%
-                      </span>
-                    )}
                     <span className="word-item-brief">
                       {w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}
                     </span>
