@@ -167,12 +167,12 @@ export default function QuizPage() {
   const currentQ = questions[qIdx];
 
   useEffect(() => {
-    if (!currentQ || phase === "done" || loading || transitioning) return;
-    if (currentQ.type !== "match") {
-      const timer = setTimeout(() => playAudio(currentQ.word.word, 2), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [qIdx, loading]);
+    if (!questions.length || phase === "done" || transitioning) return;
+    const q = questions[qIdx];
+    if (!q || q.type === "match") return;
+    const timer = setTimeout(() => playAudio(q.word.word, 2), 300);
+    return () => clearTimeout(timer);
+  }, [questions, qIdx]);
 
   const handleAnswer = useCallback(async (answer) => {
     if (answered) return;
