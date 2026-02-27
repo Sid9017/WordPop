@@ -169,27 +169,9 @@ export async function getQuizWords({ extra = false } = {}) {
     .order("created_at", { ascending: false });
 
   const today = new Date().toISOString().slice(0, 10);
-
-  // extra 模式下排除今天已考过的词
-  const todayQuizzedIds = extra
-    ? new Set((quizHistory || []).filter((q) => q.created_at.slice(0, 10) === today).map((q) => q.word_id))
-    : new Set();
-
-  const pastDates = new Set(
-    (quizHistory || []).map((q) => q.created_at.slice(0, 10)).filter((d) => d !== today)
-  );
-  const reviewCount = Math.min(15, pastDates.size * 5);
-
-  const quizzedWordIds = new Set((quizHistory || []).map((q) => q.word_id));
-  const available = extra ? allWords.filter((w) => !todayQuizzedIds.has(w.id)) : allWords;
-  const neverQuizzed = available.filter((w) => !quizzedWordIds.has(w.id));
-  const previouslyQuizzed = available.filter((w) => quizzedWordIds.has(w.id));
-
-  const newWords = shuffleArr(neverQuizzed).slice(0, 5);
-
-  if (reviewCount === 0 || previouslyQuizzed.length === 0) return newWords;
-
   const now = new Date();
+
+  // 统计每个词的做题数据
   const wordStats = {};
   for (const q of (quizHistory || [])) {
     const date = q.created_at.slice(0, 10);
@@ -201,21 +183,36 @@ export async function getQuizWords({ extra = false } = {}) {
     if (!q.is_correct) wordStats[q.word_id].wrong++;
   }
 
-  const scored = previouslyQuizzed.map((w) => {
+  const quizzedWordIds = new Set((quizHistory || []).map((q) => q.word_id));
+  const todayQuizzedIds = new Set(
+    (quizHistory || []).filter((q) => q.created_at.slice(0, 10) === today).map((q) => q.word_id)
+  );
+
+  // 新词池：从未测试过的词（extra 模式下也排除今天刚作为新词测过的）
+  const newPool = allWords.filter((w) =>
+    !quizzedWordIds.has(w.id) && !(extra && todayQuizzedIds.has(w.id))
+  );
+  const newWords = shuffleArr(newPool).slice(0, 5);
+
+  // 复习池：所有测试过的词（不排除今天的，让遗忘曲线+错误率决定优先级）
+  const reviewPool = allWords.filter((w) => quizzedWordIds.has(w.id));
+  if (reviewPool.length === 0) return newWords;
+
+  const scored = reviewPool.map((w) => {
     const stats = wordStats[w.id];
     if (!stats) return { word: w, priority: 0 };
     const daysSince = (now - stats.lastQuiz) / (1000 * 60 * 60 * 24);
     const quizDays = stats.dates.size;
     const idealInterval = REVIEW_INTERVALS[Math.min(quizDays - 1, REVIEW_INTERVALS.length - 1)];
     const timePriority = daysSince / idealInterval;
-    // 错误率越高优先级越高，错误率100%时权重翻倍
     const errorRate = stats.wrong / Math.max(stats.total, 1);
+    // 错误率越高优先级越高，全错时权重×3
     const errorWeight = 1 + errorRate * 2;
     return { word: w, priority: timePriority * errorWeight };
   });
 
   scored.sort((a, b) => b.priority - a.priority);
-  const reviewWords = scored.slice(0, reviewCount).map((s) => s.word);
+  const reviewWords = scored.slice(0, 15).map((s) => s.word);
 
   return [...newWords, ...reviewWords];
 }
