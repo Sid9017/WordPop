@@ -211,7 +211,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 .word-item {
   background: var(--card); border-radius: 8px;
   border: 1px solid var(--border); overflow: hidden;
-  animation: fadeIn 0.3s ease backwards;
+  animation: fadeIn 0.3s ease backwards; position: relative;
 }
 .word-item-header {
   display: flex; align-items: center; gap: 8px; padding: 12px 16px;
@@ -247,13 +247,14 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 
 .word-stats-bar {
-  display: flex; height: 3px; margin: 0 16px;
-  border-radius: 2px; overflow: hidden; opacity: 0.8;
+  display: flex; position: absolute; inset: 0;
+  overflow: hidden; pointer-events: none; z-index: 0;
 }
 .word-stats-fill { height: 100%; transition: width 0.5s ease; }
-.word-stats-fill.correct { background: var(--success); }
-.word-stats-fill.wrong { background: var(--danger); opacity: 0.5; }
-.word-stats-fill.untested { background: var(--border); opacity: 0.5; }
+.word-stats-fill.correct { background: var(--success); opacity: 0.12; }
+.word-stats-fill.wrong { background: var(--danger); opacity: 0.12; }
+.word-stats-fill.untested { background: transparent; }
+.word-item-header, .word-item-detail { position: relative; z-index: 1; }
 
 .word-stats-detail {
   display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-light);
