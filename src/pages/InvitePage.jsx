@@ -34,14 +34,14 @@ export default function InvitePage() {
   return (
     <div className="page center home">
       <div className="home-logo">
-        <span className="logo-emoji">🅦</span>
+        <span className="logo-letter">W</span>
         <h1>WordPop</h1>
       </div>
 
       {done ? (
         <div className="pin-box">
-          <h3>🎉 创建成功！</h3>
-          <p style={{ fontSize: 14, color: "#636e72", margin: "12px 0" }}>
+          <h3>创建成功！</h3>
+          <p style={{ fontSize: 14, color: "#7f8c8d", margin: "12px 0" }}>
             你的口令已设置，下次用这个口令登录即可
           </p>
           <button className="btn-primary" style={{ width: "100%", marginTop: 12 }}
@@ -51,8 +51,8 @@ export default function InvitePage() {
         </div>
       ) : (
         <div className="pin-box">
-          <h3>🎊 你被邀请加入 WordPop</h3>
-          <p style={{ fontSize: 13, color: "#636e72", margin: "12px 0" }}>
+          <h3>你被邀请加入 WordPop</h3>
+          <p style={{ fontSize: 13, color: "#7f8c8d", margin: "12px 0" }}>
             设置一个专属口令，以后用它登录
           </p>
           <input

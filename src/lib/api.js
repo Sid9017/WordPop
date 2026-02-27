@@ -18,12 +18,13 @@ export function playAudio(word, type = 2) {
 }
 
 export async function lookupWord(word) {
+  const query = word.toLowerCase();
   const dictsParam = encodeURIComponent(JSON.stringify({
     count: 99,
     dicts: [["ec", "blng_sents_part"]],
   }));
   const ydRes = await fetch(
-    `/youdao-api/jsonapi_s?doctype=json&jsonversion=4&le=en&q=${encodeURIComponent(word)}&dicts=${dictsParam}`
+    `/youdao-api/jsonapi_s?doctype=json&jsonversion=4&le=en&q=${encodeURIComponent(query)}&dicts=${dictsParam}`
   );
   if (!ydRes.ok) throw new Error("查询失败");
   const ydData = await ydRes.json();
@@ -31,6 +32,8 @@ export async function lookupWord(word) {
   const ecWord = ydData.ec?.word;
   const ec = Array.isArray(ecWord) ? ecWord[0] : ecWord;
   if (!ec) throw new Error("词典未找到该单词");
+
+  const canonicalWord = ec["return-phrase"]?.l?.i || query;
 
   const ukPhonetic = ec.ukphone ? `/${ec.ukphone}/` : "";
   const usPhonetic = ec.usphone ? `/${ec.usphone}/` : "";
@@ -58,19 +61,19 @@ export async function lookupWord(word) {
   let imageUrl = "";
   try {
     let imgRes = await fetch(
-      `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(word)}&image_type=photo&per_page=5&safesearch=true&editors_choice=true`
+      `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(query)}&image_type=photo&per_page=5&safesearch=true&editors_choice=true`
     );
     let imgData = imgRes.ok ? await imgRes.json() : { hits: [] };
     if (!imgData.hits?.length) {
       imgRes = await fetch(
-        `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(word)}&image_type=photo&per_page=5&safesearch=true`
+        `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(query)}&image_type=photo&per_page=5&safesearch=true`
       );
       imgData = imgRes.ok ? await imgRes.json() : { hits: [] };
     }
     imageUrl = imgData.hits?.[0]?.webformatURL || "";
-  } catch { /* 图片获取失败不影响主流程 */ }
+  } catch { /* ignore */ }
 
-  return { word, ukPhonetic, usPhonetic, imageUrl, meanings };
+  return { word: canonicalWord, ukPhonetic, usPhonetic, imageUrl, meanings };
 }
 
 // ===== 家长：保存单词 =====
@@ -109,7 +112,7 @@ export async function saveWord({ word, ukPhonetic, usPhonetic, phonetic, imageUr
   await supabase
     .from("progress")
     .upsert(
-      { word_id: wordRow.id, stage: "reserve", next_review_at: new Date().toISOString(), family_id: familyId },
+      { word_id: wordRow.id, stage: "testing", next_review_at: new Date().toISOString(), family_id: familyId },
       { onConflict: "word_id" }
     );
 
@@ -130,79 +133,94 @@ export async function deleteWord(id) {
   await supabase.from("words").delete().eq("id", id);
 }
 
-// ===== 阶段流转 =====
-// reserve → learning → testing → review → mastered
+// ===== 闯关选词 =====
 
-export async function getWordsByStage(stage) {
+function shuffleArr(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// 艾宾浩斯遗忘曲线复习间隔（天）
+// 第1次→1天后复习，第2次→2天，第3次→4天，第4次→1周，第5次→2周，第6次→1月
+const REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30];
+
+export async function getQuizWords() {
   const familyId = getFamilyId();
-  const { data } = await supabase
-    .from("progress")
-    .select("word_id, stage, words(*, meanings(*))")
-    .eq("stage", stage)
+
+  const todayDone = await getTodayQuizDone();
+  if (todayDone) return [];
+
+  const { data: allWords } = await supabase
+    .from("words")
+    .select("*, meanings(*)")
     .eq("family_id", familyId);
-  return (data || []).map((d) => d.words).filter(Boolean);
-}
+  if (!allWords?.length) return [];
 
-export async function getReserveWords() {
-  return getWordsByStage("reserve");
-}
-
-export async function getLearningWords() {
-  return getWordsByStage("learning");
-}
-
-export async function getTestingWords() {
-  return getWordsByStage("testing");
-}
-
-export async function getReviewWords() {
-  const familyId = getFamilyId();
-  const { data } = await supabase
-    .from("progress")
-    .select("word_id, stage, words(*, meanings(*))")
-    .eq("stage", "review")
+  const { data: quizHistory } = await supabase
+    .from("quiz_log")
+    .select("word_id, created_at, is_correct")
     .eq("family_id", familyId)
-    .lte("next_review_at", new Date().toISOString());
-  return (data || []).map((d) => d.words).filter(Boolean);
-}
+    .order("created_at", { ascending: false });
 
-// 学生选词：reserve → learning
-export async function selectWordsForToday(wordIds) {
-  for (const wid of wordIds) {
-    await supabase
-      .from("progress")
-      .update({ stage: "learning" })
-      .eq("word_id", wid)
-      .eq("stage", "reserve");
-  }
-}
+  const today = new Date().toISOString().slice(0, 10);
+  const pastDates = new Set(
+    (quizHistory || []).map((q) => q.created_at.slice(0, 10)).filter((d) => d !== today)
+  );
+  const reviewCount = Math.min(15, pastDates.size * 5);
 
-// 学完卡片：learning → testing
-export async function markAsTestable(wordIds) {
-  for (const wid of wordIds) {
-    await supabase
-      .from("progress")
-      .update({ stage: "testing" })
-      .eq("word_id", wid)
-      .eq("stage", "learning");
-  }
-}
+  const quizzedWordIds = new Set((quizHistory || []).map((q) => q.word_id));
+  const neverQuizzed = allWords.filter((w) => !quizzedWordIds.has(w.id));
+  const previouslyQuizzed = allWords.filter((w) => quizzedWordIds.has(w.id));
 
-// 闯关通过：testing → review
-export async function markAsReview(wordIds) {
+  const newWords = shuffleArr(neverQuizzed).slice(0, 5);
+
+  if (reviewCount === 0 || previouslyQuizzed.length === 0) return newWords;
+
   const now = new Date();
-  const nextReview = new Date();
-  nextReview.setDate(nextReview.getDate() + 2);
+  const wordStats = {};
+  for (const q of (quizHistory || [])) {
+    const date = q.created_at.slice(0, 10);
+    if (!wordStats[q.word_id]) {
+      wordStats[q.word_id] = { lastQuiz: new Date(q.created_at), dates: new Set(), wrong: 0, total: 0 };
+    }
+    wordStats[q.word_id].dates.add(date);
+    wordStats[q.word_id].total++;
+    if (!q.is_correct) wordStats[q.word_id].wrong++;
+  }
+
+  const scored = previouslyQuizzed.map((w) => {
+    const stats = wordStats[w.id];
+    if (!stats) return { word: w, priority: 0 };
+    const daysSince = (now - stats.lastQuiz) / (1000 * 60 * 60 * 24);
+    const quizDays = stats.dates.size;
+    const idealInterval = REVIEW_INTERVALS[Math.min(quizDays - 1, REVIEW_INTERVALS.length - 1)];
+    const timePriority = daysSince / idealInterval;
+    // 错误率越高优先级越高，错误率100%时权重翻倍
+    const errorRate = stats.wrong / Math.max(stats.total, 1);
+    const errorWeight = 1 + errorRate * 2;
+    return { word: w, priority: timePriority * errorWeight };
+  });
+
+  scored.sort((a, b) => b.priority - a.priority);
+  const reviewWords = scored.slice(0, reviewCount).map((s) => s.word);
+
+  return [...newWords, ...reviewWords];
+}
+
+export async function updateMasteryStatus(wordIds) {
   for (const wid of wordIds) {
-    await supabase
+    const { data: prog } = await supabase
       .from("progress")
-      .update({
-        stage: "review",
-        last_quiz_at: now.toISOString(),
-        next_review_at: nextReview.toISOString(),
-      })
+      .select("correct_count")
       .eq("word_id", wid)
-      .eq("stage", "testing");
+      .single();
+    if (prog && prog.correct_count >= 5) {
+      await supabase.from("progress").update({ stage: "mastered" }).eq("word_id", wid);
+    }
   }
 }
 
@@ -235,33 +253,6 @@ export async function recordQuiz(wordId, meaningId, quizType, isCorrect) {
     .eq("word_id", wordId);
 }
 
-// 复习通过后更新
-export async function markReviewDone(wordIds) {
-  for (const wid of wordIds) {
-    const { data: prog } = await supabase
-      .from("progress")
-      .select("*")
-      .eq("word_id", wid)
-      .single();
-    if (!prog) continue;
-
-    const correct = prog.correct_count;
-    let stage = "review";
-    const nextReview = new Date();
-    if (correct >= 5) {
-      stage = "mastered";
-      nextReview.setDate(nextReview.getDate() + 14);
-    } else {
-      nextReview.setDate(nextReview.getDate() + 2);
-    }
-
-    await supabase
-      .from("progress")
-      .update({ stage, next_review_at: nextReview.toISOString() })
-      .eq("word_id", wid);
-  }
-}
-
 // ===== 打卡 =====
 
 export async function checkinToday() {
@@ -285,35 +276,15 @@ export async function getCheckins(days = 30) {
   return (data || []).map((d) => d.check_date);
 }
 
-export async function getTodayTaskStatus() {
+export async function getTodayQuizDone() {
   const familyId = getFamilyId();
-  const testing = await getTestingWords();
-  const review = await getReviewWords();
-  const learning = await getLearningWords();
-
-  const hasLearning = learning.length > 0;
-  const hasTesting = testing.length > 0;
-  const hasReview = review.length > 0;
-
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const { data: quizLogs } = await supabase
+  const { data } = await supabase
     .from("quiz_log")
     .select("id")
     .eq("family_id", familyId)
     .gte("created_at", todayStart.toISOString())
     .limit(1);
-  const quizCount = quizLogs?.length || 0;
-
-  const quizDone = !hasTesting && quizCount > 0;
-  const reviewDone = !hasReview;
-  const learnDone = !hasLearning;
-
-  return {
-    learnDone, quizDone, reviewDone, hasLearning, hasTesting, hasReview,
-    testingCount: testing.length,
-    reviewCount: review.length,
-    learningCount: learning.length,
-    allDone: learnDone && quizDone && reviewDone,
-  };
+  return (data?.length || 0) > 0;
 }

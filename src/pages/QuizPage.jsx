@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { getTestingWords, getReviewWords, recordQuiz, markAsReview, markReviewDone, playAudio } from "../lib/api";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio } from "../lib/api";
+import { useNavigate } from "react-router-dom";
 import Confetti from "../components/Confetti";
+import { SpeakerIcon, RefreshIcon } from "../components/Icons";
 
 function primaryMeaning(text) {
   if (!text) return "";
@@ -119,8 +120,6 @@ function MatchGame({ pairs, onComplete }) {
 }
 
 export default function QuizPage() {
-  const [searchParams] = useSearchParams();
-  const isReview = searchParams.get("mode") === "review";
   const navigate = useNavigate();
 
   const [allWords, setAllWords] = useState([]);
@@ -136,17 +135,32 @@ export default function QuizPage() {
   const [loading, setLoading] = useState(true);
   const [showConfetti, setShowConfetti] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const [todayDone, setTodayDone] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const words = isReview ? await getReviewWords() : await getTestingWords();
+      const done = await getTodayQuizDone();
+      if (done) {
+        setTodayDone(true);
+        setLoading(false);
+        return;
+      }
+      const words = await getQuizWords();
       setAllWords(words);
       setQuestions(buildQuestions(words));
       setLoading(false);
     })();
-  }, [isReview]);
+  }, []);
 
   const currentQ = questions[qIdx];
+
+  useEffect(() => {
+    if (!currentQ || phase === "done" || loading || transitioning) return;
+    if (currentQ.type !== "match") {
+      const timer = setTimeout(() => playAudio(currentQ.word.word, 2), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [qIdx, phase, loading, transitioning, currentQ]);
 
   const handleAnswer = useCallback(async (answer) => {
     if (answered) return;
@@ -202,8 +216,7 @@ export default function QuizPage() {
       setPhase("done");
       setShowConfetti(true);
       const wordIds = allWords.map((w) => w.id);
-      if (isReview) await markReviewDone(wordIds);
-      else await markAsReview(wordIds);
+      await updateMasteryStatus(wordIds);
       setTimeout(() => setShowConfetti(false), 4000);
     }
   }
@@ -217,13 +230,13 @@ export default function QuizPage() {
 
   if (loading) return <div className="page center"><p className="loading-text">加载题目中...</p></div>;
 
-  if (!questions.length) {
+  if (todayDone || !questions.length) {
     return (
       <div className="page center">
         <div className="empty-state">
-          <span className="empty-icon">{isReview ? "📭" : "📭"}</span>
-          <h2>{isReview ? "暂无待复习的单词" : "暂无待测试的单词"}</h2>
-          <p>{isReview ? "复习任务已完成" : "先去认识新单词吧！"}</p>
+          <span className="empty-icon">{todayDone ? "—" : "—"}</span>
+          <h2>{todayDone ? "今天的闯关已完成" : "暂无待测试的单词"}</h2>
+          <p>{todayDone ? "明天再来吧！" : "请让家长先添加单词吧！"}</p>
           <button className="btn-primary" onClick={() => navigate("/child")}>返回</button>
         </div>
       </div>
@@ -236,10 +249,9 @@ export default function QuizPage() {
       <div className="page center">
         {showConfetti && <Confetti />}
         <div className="result-card">
-          <h1>{pct >= 80 ? "🎉 太棒了！" : pct >= 60 ? "👍 不错！" : "💪 继续加油！"}</h1>
+          <h1>{pct >= 80 ? "太棒了！" : pct >= 60 ? "不错！" : "继续加油！"}</h1>
           <div className="score-ring"><span className="score-num">{pct}%</span></div>
           <p>共 {score.total} 题，答对 {score.correct} 题</p>
-          <p style={{ fontSize: 14, color: "#636e72" }}>{isReview ? "复习完成，单词已更新" : "单词已转入复习库"}</p>
           <div className="result-actions"><button className="btn-primary" onClick={() => navigate("/child")}>返回首页</button></div>
         </div>
       </div>
@@ -252,7 +264,11 @@ export default function QuizPage() {
   return (
     <div className="page center">
       {showConfetti && <Confetti />}
-      {phase === "retry" && <div className="retry-banner">🔄 错题重考回合</div>}
+      {phase === "retry" && (
+        <div className="retry-banner">
+          <RefreshIcon size={14} /> 错题重考回合
+        </div>
+      )}
       <div className="quiz-progress"><div className="quiz-progress-bar" style={{ width: `${progressPct}%` }} /></div>
       <p className="progress-text">第 {qIdx + 1} / {questions.length} 题</p>
 
@@ -266,12 +282,18 @@ export default function QuizPage() {
                 <p className="quiz-label">看中文，选英文</p>
                 <h2 className="quiz-prompt">{q.display_cn}</h2>
                 {q.meaning.pos && <span className="pos-tag">{q.meaning.pos}</span>}
+                <button className="audio-replay-btn" onClick={() => playAudio(q.word.word, 2)} title="再听一遍">
+                  <SpeakerIcon size={14} /> 再听一遍
+                </button>
                 <div className="options">
                   {q.options.map((opt, i) => (
                     <button key={i}
                       className={`option ${answered ? (opt === q.word.word ? "correct" : opt === selected ? "wrong" : "") : ""}`}
                       onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}
-                      disabled={false}>{opt} {answered && opt === q.word.word && <span className="audio-hint">🔊</span>}</button>
+                      disabled={false}>
+                      {opt}
+                      {answered && opt === q.word.word && <span className="audio-hint"><SpeakerIcon size={14} /></span>}
+                    </button>
                   ))}
                 </div>
               </>
@@ -279,7 +301,9 @@ export default function QuizPage() {
             {q.type === "en2cn" && (
               <>
                 <p className="quiz-label">看英文，选中文</p>
-                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>{q.word.word} <span className="audio-hint">🔊</span></h2>
+                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                  {q.word.word} <span className="audio-hint"><SpeakerIcon size={18} /></span>
+                </h2>
                 <span className="phonetic">{q.word.phonetic}</span>
                 <div className="options">
                   {q.options.map((opt, i) => (
@@ -293,8 +317,30 @@ export default function QuizPage() {
             {q.type === "spell" && (
               <>
                 <p className="quiz-label">拼写单词</p>
-                <h2 className="quiz-prompt">{q.display_cn}</h2>
-                {q.meaning.pos && <span className="pos-tag">{q.meaning.pos}</span>}
+                <div className="spell-definition">
+                  {q.word.meanings?.map((m, i) => (
+                    <div key={i} className="spell-meaning-item">
+                      {m.pos && <span className="pos-tag">{m.pos}</span>}
+                      <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="phonetic-row" style={{ margin: "12px 0" }}>
+                  {q.word.uk_phonetic && (
+                    <span className="phonetic-item">
+                      <span className="phonetic-label">UK</span>
+                      <span className="phonetic">{q.word.uk_phonetic}</span>
+                      <button className="audio-btn" onClick={() => playAudio(q.word.word, 1)}><SpeakerIcon size={14} /></button>
+                    </span>
+                  )}
+                  {q.word.phonetic && (
+                    <span className="phonetic-item">
+                      <span className="phonetic-label">US</span>
+                      <span className="phonetic">{q.word.phonetic}</span>
+                      <button className="audio-btn" onClick={() => playAudio(q.word.word, 2)}><SpeakerIcon size={14} /></button>
+                    </span>
+                  )}
+                </div>
                 <div className="spell-input">
                   <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
@@ -303,7 +349,11 @@ export default function QuizPage() {
                 </div>
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
-                    {isCorrect ? "✅ 正确！" : <>❌ 正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>{q.word.word} 🔊</span></>}
+                    {isCorrect ? "正确！" : (
+                      <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                        {q.word.word} <SpeakerIcon size={14} />
+                      </span></>
+                    )}
                   </p>
                 )}
               </>
@@ -314,7 +364,7 @@ export default function QuizPage() {
 
       {answered && (
         <button className="btn-primary btn-next" onClick={nextQuestion}>
-          {qIdx < questions.length - 1 ? "下一题 →" : phase === "quiz" && wrongOnes.length > 0 ? "进入错题重考 🔄" : "查看结果 🏆"}
+          {qIdx < questions.length - 1 ? "下一题" : phase === "quiz" && wrongOnes.length > 0 ? "进入错题重考" : "查看结果"}
         </button>
       )}
     </div>

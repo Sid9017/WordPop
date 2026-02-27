@@ -1,11 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
-import { lookupWord, saveWord, getAllWords, deleteWord } from "../lib/api";
+import { lookupWord, saveWord, getAllWords, deleteWord, playAudio } from "../lib/api";
 import { getInviteToken } from "../lib/family";
+import { SpeakerIcon } from "../components/Icons";
 
 const STAGE_LABELS = {
-  reserve: "储备", learning: "学习中", testing: "待测试",
-  review: "待复习", mastered: "已掌握",
+  testing: "待测试", mastered: "已掌握",
 };
+
+const STAGE_FILTERS = [
+  { value: "all", label: "全部" },
+  { value: "testing", label: "待测试" },
+  { value: "mastered", label: "已掌握" },
+];
 
 export default function ParentPage() {
   const [input, setInput] = useState("");
@@ -15,6 +21,11 @@ export default function ParentPage() {
   const [msg, setMsg] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [copied, setCopied] = useState(false);
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [expandedWords, setExpandedWords] = useState({});
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   useEffect(() => { loadWords(); }, []);
 
@@ -41,7 +52,7 @@ export default function ParentPage() {
     setLoading(true);
     try {
       await saveWord(preview);
-      setMsg("✅ 已保存");
+      setMsg("已保存");
       setPreview(null);
       setInput("");
       loadWords();
@@ -65,9 +76,44 @@ export default function ParentPage() {
     loadWords();
   }
 
+  function toggleWord(id) {
+    setExpandedWords((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  const filtered = useMemo(() => {
+    setPage(1);
+    let list = words;
+    if (stageFilter !== "all") {
+      list = list.filter((w) => {
+        const stage = w.progress?.[0]?.stage || "testing";
+        return stage === stageFilter;
+      });
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((w) =>
+        w.word.toLowerCase().includes(q) ||
+        w.meanings?.some((m) => m.meaning_cn?.includes(q))
+      );
+    }
+    return list;
+  }, [words, stageFilter, search]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const stageCounts = useMemo(() => {
+    const counts = { all: words.length };
+    for (const w of words) {
+      const stage = w.progress?.[0]?.stage || "testing";
+      counts[stage] = (counts[stage] || 0) + 1;
+    }
+    return counts;
+  }, [words]);
+
   return (
     <div className="page">
-      <h1 className="page-title">📝 家长管理</h1>
+      <h1 className="page-title">家长管理</h1>
 
       <div className="input-row">
         <input
@@ -89,9 +135,22 @@ export default function ParentPage() {
           <div className="preview-header">
             <div>
               <h2>{preview.word}</h2>
-              {preview.ukPhonetic && <span className="phonetic">🇬🇧 {preview.ukPhonetic}</span>}
-              {" "}
-              {preview.usPhonetic && <span className="phonetic">🇺🇸 {preview.usPhonetic}</span>}
+              <div className="phonetic-row">
+                {preview.ukPhonetic && (
+                  <span className="phonetic-item">
+                    <span className="phonetic-label">UK</span>
+                    <span className="phonetic">{preview.ukPhonetic}</span>
+                    <button className="audio-btn" onClick={() => playAudio(preview.word, 1)} title="英音"><SpeakerIcon size={14} /></button>
+                  </span>
+                )}
+                {preview.usPhonetic && (
+                  <span className="phonetic-item">
+                    <span className="phonetic-label">US</span>
+                    <span className="phonetic">{preview.usPhonetic}</span>
+                    <button className="audio-btn" onClick={() => playAudio(preview.word, 2)} title="美音"><SpeakerIcon size={14} /></button>
+                  </span>
+                )}
+              </div>
             </div>
             {preview.imageUrl && (
               <img src={preview.imageUrl} alt={preview.word} className="preview-img" />
@@ -110,7 +169,7 @@ export default function ParentPage() {
                 >
                   {m.meaning_cn}
                 </p>
-                {m.example && <p className="example">💬 {m.example}</p>}
+                {m.example && <p className="example">{m.example}</p>}
                 {m.example_cn && <p className="example">{m.example_cn}</p>}
               </div>
             ))}
@@ -122,12 +181,136 @@ export default function ParentPage() {
         </div>
       )}
 
-      <h2>已添加的单词 ({words.length})</h2>
-      <WordArchive words={words} onDelete={handleDelete} />
+      <div className="word-browser">
+        <h2>已添加的单词 ({words.length})</h2>
+
+        <div className="browser-toolbar">
+          <input
+            className="browser-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索单词或释义..."
+          />
+          <div className="stage-filters">
+            {STAGE_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                className={`stage-filter-btn ${stageFilter === f.value ? "active" : ""}`}
+                onClick={() => setStageFilter(f.value)}
+              >
+                {f.label}
+                {stageCounts[f.value] != null && (
+                  <span className="filter-count">{stageCounts[f.value] || 0}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <p className="browser-empty">
+            {search || stageFilter !== "all" ? "没有匹配的单词" : "还没有添加单词"}
+          </p>
+        ) : (
+          <div className="word-list">
+            {paged.map((w) => {
+              const stage = w.progress?.[0]?.stage || "testing";
+              const correct = w.progress?.[0]?.correct_count || 0;
+              const wrong = w.progress?.[0]?.wrong_count || 0;
+              const total = correct + wrong;
+              const accuracy = total > 0 ? correct / total : -1;
+              const hue = accuracy >= 0 ? Math.round(accuracy * 120) : 0;
+              const bgOpacity = total > 0 ? Math.min(0.12, 0.04 + (total / 40) * 0.08) : 0;
+              const cardStyle = total > 0
+                ? { background: `linear-gradient(135deg, hsla(${hue}, 75%, 55%, ${bgOpacity}) 0%, transparent 70%)` }
+                : {};
+
+              return (
+                <div key={w.id} className="word-item" style={cardStyle}>
+                  <div className="word-item-header" onClick={() => toggleWord(w.id)}>
+                    <span className="word-item-arrow">{expandedWords[w.id] ? "▾" : "▸"}</span>
+                    <strong className="word-item-word">{w.word}</strong>
+                    <span className="phonetic">{w.phonetic}</span>
+                    <span className={`stage-badge ${stage}`}>
+                      {STAGE_LABELS[stage] || stage}
+                    </span>
+                    {total > 0 && (
+                      <span className="word-item-acc" style={{ color: `hsl(${hue}, 65%, 40%)` }}>
+                        {Math.round(accuracy * 100)}%
+                      </span>
+                    )}
+                    <span className="word-item-brief">
+                      {w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}
+                    </span>
+                  </div>
+                  {total > 0 && (
+                    <div className="word-stats-bar">
+                      <div className="word-stats-fill correct" style={{ width: `${accuracy * 100}%` }} />
+                      <div className="word-stats-fill wrong" style={{ width: `${(1 - accuracy) * 100}%` }} />
+                    </div>
+                  )}
+                  {expandedWords[w.id] && (
+                    <div className="word-item-detail">
+                      {total > 0 && (
+                        <div className="word-stats-detail">
+                          <span>做题 {total} 次</span>
+                          <span className="stats-correct">正确 {correct}</span>
+                          <span className="stats-wrong">错误 {wrong}</span>
+                          <span style={{ color: `hsl(${hue}, 65%, 40%)`, fontWeight: 600 }}>
+                            正确率 {Math.round(accuracy * 100)}%
+                          </span>
+                        </div>
+                      )}
+                      {w.image_url && <img src={w.image_url} alt={w.word} className="word-item-img" />}
+                      <div className="phonetic-row">
+                        {w.uk_phonetic && (
+                          <span className="phonetic-item">
+                            <span className="phonetic-label">UK</span>
+                            <span className="phonetic">{w.uk_phonetic}</span>
+                            <button className="audio-btn" onClick={() => playAudio(w.word, 1)} title="英音"><SpeakerIcon size={14} /></button>
+                          </span>
+                        )}
+                        {w.phonetic && (
+                          <span className="phonetic-item">
+                            <span className="phonetic-label">US</span>
+                            <span className="phonetic">{w.phonetic}</span>
+                            <button className="audio-btn" onClick={() => playAudio(w.word, 2)} title="美音"><SpeakerIcon size={14} /></button>
+                          </span>
+                        )}
+                      </div>
+                      {w.meanings?.map((m, i) => (
+                        <div key={i} className="word-item-meaning">
+                          {m.pos && <span className="pos-tag">{m.pos}</span>}
+                          <p style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</p>
+                          {m.example && (
+                            <div className="example-block">
+                              <p className="example-en">{m.example}</p>
+                              {m.example_cn && <p className="example-cn">{m.example_cn}</p>}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      <button className="btn-del" onClick={() => handleDelete(w.id)}>删除此词</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="pagination">
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
+            <span className="pagination-info">{page} / {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</button>
+          </div>
+        )}
+      </div>
 
       <div className="invite-section">
-        <h2>📨 邀请新用户</h2>
-        <p style={{ fontSize: 13, color: "#636e72", margin: "8px 0" }}>
+        <h2>邀请新用户</h2>
+        <p style={{ fontSize: 13, color: "#7f8c8d", margin: "8px 0" }}>
           生成邀请链接发给朋友，对方打开后即可创建自己的账号
         </p>
         {inviteLink ? (
@@ -138,7 +321,7 @@ export default function ParentPage() {
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}>
-              {copied ? "已复制 ✓" : "复制"}
+              {copied ? "已复制" : "复制"}
             </button>
           </div>
         ) : (
@@ -150,83 +333,6 @@ export default function ParentPage() {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-function WordArchive({ words, onDelete }) {
-  const [expandedDates, setExpandedDates] = useState({});
-  const [expandedWords, setExpandedWords] = useState({});
-
-  const grouped = useMemo(() => {
-    const map = {};
-    for (const w of words) {
-      const date = w.created_at?.slice(0, 10) || "未知日期";
-      if (!map[date]) map[date] = [];
-      map[date].push(w);
-    }
-    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [words]);
-
-  function toggleDate(date) {
-    setExpandedDates((prev) => ({ ...prev, [date]: !prev[date] }));
-  }
-
-  function toggleWord(id) {
-    setExpandedWords((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  return (
-    <div className="archive">
-      {grouped.map(([date, items]) => {
-        const label = date === today ? `今天 (${date})` : date;
-        const open = expandedDates[date] ?? date === today;
-        return (
-          <div key={date} className="archive-group">
-            <div className="archive-date" onClick={() => toggleDate(date)}>
-              <span className="archive-arrow">{open ? "▼" : "▶"}</span>
-              <span>{label}</span>
-              <span className="archive-count">{items.length} 个词</span>
-            </div>
-            {open && (
-              <div className="archive-items">
-                {items.map((w) => {
-                  const stage = w.progress?.[0]?.stage || "reserve";
-                  return (
-                    <div key={w.id} className="archive-word">
-                      <div className="archive-word-header" onClick={() => toggleWord(w.id)}>
-                        <span className="archive-arrow-sm">{expandedWords[w.id] ? "▾" : "▸"}</span>
-                        <strong>{w.word}</strong>
-                        <span className="phonetic">{w.phonetic}</span>
-                        <span className={`stage-badge ${stage}`}>
-                          {STAGE_LABELS[stage] || stage}
-                        </span>
-                        <span className="archive-brief">
-                          {w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}
-                        </span>
-                      </div>
-                      {expandedWords[w.id] && (
-                        <div className="archive-detail">
-                          {w.image_url && <img src={w.image_url} alt={w.word} className="archive-img" />}
-                          {w.meanings?.map((m, i) => (
-                            <div key={i} className="archive-meaning">
-                              {m.pos && <span className="pos-tag">{m.pos}</span>}
-                              <p style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</p>
-                            </div>
-                          ))}
-                          <button className="btn-del" onClick={() => onDelete(w.id)}>删除此词</button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }
