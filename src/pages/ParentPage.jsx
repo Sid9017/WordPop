@@ -89,7 +89,9 @@ export default function ParentPage() {
           <div className="preview-header">
             <div>
               <h2>{preview.word}</h2>
-              <span className="phonetic">{preview.phonetic}</span>
+              {preview.ukPhonetic && <span className="phonetic">🇬🇧 {preview.ukPhonetic}</span>}
+              {" "}
+              {preview.usPhonetic && <span className="phonetic">🇺🇸 {preview.usPhonetic}</span>}
             </div>
             {preview.imageUrl && (
               <img src={preview.imageUrl} alt={preview.word} className="preview-img" />
@@ -108,7 +110,8 @@ export default function ParentPage() {
                 >
                   {m.meaning_cn}
                 </p>
-                {m.example && <p className="example">例: {m.example}</p>}
+                {m.example && <p className="example">💬 {m.example}</p>}
+                {m.example_cn && <p className="example">{m.example_cn}</p>}
               </div>
             ))}
           </div>

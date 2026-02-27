@@ -11,9 +11,19 @@ const POS_MAP = {
 
 // ===== 查词 =====
 
+export function playAudio(word, type = 2) {
+  const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${type}`;
+  const audio = new Audio(url);
+  audio.play().catch(() => {});
+}
+
 export async function lookupWord(word) {
+  const dictsParam = encodeURIComponent(JSON.stringify({
+    count: 99,
+    dicts: [["ec", "blng_sents_part"]],
+  }));
   const ydRes = await fetch(
-    `/youdao-api/jsonapi_s?doctype=json&jsonversion=4&le=en&q=${encodeURIComponent(word)}`
+    `/youdao-api/jsonapi_s?doctype=json&jsonversion=4&le=en&q=${encodeURIComponent(word)}&dicts=${dictsParam}`
   );
   if (!ydRes.ok) throw new Error("查询失败");
   const ydData = await ydRes.json();
@@ -22,19 +32,26 @@ export async function lookupWord(word) {
   const ec = Array.isArray(ecWord) ? ecWord[0] : ecWord;
   if (!ec) throw new Error("词典未找到该单词");
 
-  const phonetic = ec.usphone ? `/${ec.usphone}/` : ec.ukphone ? `/${ec.ukphone}/` : "";
+  const ukPhonetic = ec.ukphone ? `/${ec.ukphone}/` : "";
+  const usPhonetic = ec.usphone ? `/${ec.usphone}/` : "";
 
-  const meanings = (ec.trs || []).map((t) => {
+  const sentPairs = ydData.blng_sents_part?.["sentence-pair"] || [];
+  const oxfordSents = sentPairs.filter((s) => s.source?.includes("牛津"));
+  const allSents = oxfordSents.length > 0 ? oxfordSents : sentPairs;
+
+  const meanings = (ec.trs || []).map((t, idx) => {
     const raw = t.tran || "";
     const items = raw.split(/[；;]/).map((s) => s.trim()).filter(Boolean);
     const numbered = items.length > 1
       ? items.map((s, i) => `${i + 1}. ${s}`).join("\n")
       : items[0] || raw;
+    const sent = allSents[idx];
     return {
       pos: POS_MAP[t.pos?.replace(".", "")] || t.pos?.replace(".", "") || "",
       meaning_cn: numbered,
       meaning_en: "",
-      example: "",
+      example: sent?.sentence?.replace(/<[^>]*>/g, "") || "",
+      example_cn: sent?.["sentence-translation"] || "",
     };
   });
 
@@ -53,17 +70,23 @@ export async function lookupWord(word) {
     imageUrl = imgData.hits?.[0]?.webformatURL || "";
   } catch { /* 图片获取失败不影响主流程 */ }
 
-  return { word, phonetic, imageUrl, meanings };
+  return { word, ukPhonetic, usPhonetic, imageUrl, meanings };
 }
 
 // ===== 家长：保存单词 =====
 
-export async function saveWord({ word, phonetic, imageUrl, meanings }) {
+export async function saveWord({ word, ukPhonetic, usPhonetic, phonetic, imageUrl, meanings }) {
   const familyId = getFamilyId();
   const { data: wordRow, error: wErr } = await supabase
     .from("words")
     .upsert(
-      { word, phonetic, image_url: imageUrl, family_id: familyId },
+      {
+        word,
+        phonetic: usPhonetic || phonetic || "",
+        uk_phonetic: ukPhonetic || "",
+        image_url: imageUrl,
+        family_id: familyId,
+      },
       { onConflict: "word,family_id" }
     )
     .select()
@@ -77,7 +100,8 @@ export async function saveWord({ word, phonetic, imageUrl, meanings }) {
     pos: m.pos,
     meaning_en: m.meaning_en,
     meaning_cn: m.meaning_cn,
-    example: m.example,
+    example: m.example || "",
+    example_cn: m.example_cn || "",
   }));
   const { error: mErr } = await supabase.from("meanings").insert(rows);
   if (mErr) throw mErr;

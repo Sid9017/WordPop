@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getReserveWords, getLearningWords, selectWordsForToday, markAsTestable } from "../lib/api";
+import { getReserveWords, getLearningWords, selectWordsForToday, markAsTestable, playAudio } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 
 export default function LearnPage() {
@@ -69,17 +69,57 @@ export default function LearnPage() {
               <img src={w.image_url} alt={w.word} className="card-img" />
             )}
             <h1 className="card-word">{w.word}</h1>
-            <p className="phonetic">{w.phonetic}</p>
+            <div className="phonetic-row">
+              {w.uk_phonetic && (
+                <span className="phonetic-item">
+                  <span className="phonetic-label">🇬🇧</span>
+                  <span className="phonetic">{w.uk_phonetic}</span>
+                  <button className="audio-btn" onClick={(e) => { e.stopPropagation(); playAudio(w.word, 1); }} title="英音">
+                    🔊
+                  </button>
+                </span>
+              )}
+              {w.phonetic && (
+                <span className="phonetic-item">
+                  <span className="phonetic-label">🇺🇸</span>
+                  <span className="phonetic">{w.phonetic}</span>
+                  <button className="audio-btn" onClick={(e) => { e.stopPropagation(); playAudio(w.word, 2); }} title="美音">
+                    🔊
+                  </button>
+                </span>
+              )}
+            </div>
             <p className="hint">👆 点击查看释义</p>
           </div>
           <div className="flashcard-back">
             <h2>{w.word}</h2>
+            <div className="phonetic-row" style={{ marginBottom: 12 }}>
+              {w.uk_phonetic && (
+                <span className="phonetic-item">
+                  <span className="phonetic-label">🇬🇧</span>
+                  <span className="phonetic">{w.uk_phonetic}</span>
+                  <button className="audio-btn" onClick={(e) => { e.stopPropagation(); playAudio(w.word, 1); }}>🔊</button>
+                </span>
+              )}
+              {w.phonetic && (
+                <span className="phonetic-item">
+                  <span className="phonetic-label">🇺🇸</span>
+                  <span className="phonetic">{w.phonetic}</span>
+                  <button className="audio-btn" onClick={(e) => { e.stopPropagation(); playAudio(w.word, 2); }}>🔊</button>
+                </span>
+              )}
+            </div>
             <div className="card-meanings">
               {w.meanings?.map((m, i) => (
                 <div key={i} className="card-meaning">
                   <span className="pos-tag">{m.pos}</span>
                   <p className="cn" style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</p>
-                  {m.example && <p className="example">💬 {m.example}</p>}
+                  {m.example && (
+                    <div className="example-block">
+                      <p className="example-en">💬 {m.example}</p>
+                      {m.example_cn && <p className="example-cn">{m.example_cn}</p>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

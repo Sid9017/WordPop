@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getTestingWords, getReviewWords, recordQuiz, markAsReview, markReviewDone } from "../lib/api";
+import { getTestingWords, getReviewWords, recordQuiz, markAsReview, markReviewDone, playAudio } from "../lib/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Confetti from "../components/Confetti";
 
@@ -270,7 +270,8 @@ export default function QuizPage() {
                   {q.options.map((opt, i) => (
                     <button key={i}
                       className={`option ${answered ? (opt === q.word.word ? "correct" : opt === selected ? "wrong" : "") : ""}`}
-                      onClick={() => handleAnswer(opt)} disabled={answered}>{opt}</button>
+                      onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}
+                      disabled={false}>{opt} {answered && opt === q.word.word && <span className="audio-hint">🔊</span>}</button>
                   ))}
                 </div>
               </>
@@ -278,7 +279,7 @@ export default function QuizPage() {
             {q.type === "en2cn" && (
               <>
                 <p className="quiz-label">看英文，选中文</p>
-                <h2 className="quiz-prompt">{q.word.word}</h2>
+                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>{q.word.word} <span className="audio-hint">🔊</span></h2>
                 <span className="phonetic">{q.word.phonetic}</span>
                 <div className="options">
                   {q.options.map((opt, i) => (
@@ -302,7 +303,7 @@ export default function QuizPage() {
                 </div>
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
-                    {isCorrect ? "✅ 正确！" : `❌ 正确答案: ${q.word.word}`}
+                    {isCorrect ? "✅ 正确！" : <>❌ 正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>{q.word.word} 🔊</span></>}
                   </p>
                 )}
               </>

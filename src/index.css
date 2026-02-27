@@ -307,6 +307,37 @@ input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 4px rgba(108
 .card-word { font-size: 36px; margin-bottom: 4px; }
 .hint { color: var(--text-light); font-size: 13px; margin-top: 16px; animation: pulse 2s ease infinite; }
 
+/* ===== Phonetic Row & Audio ===== */
+.phonetic-row {
+  display: flex; gap: 16px; justify-content: center; align-items: center;
+  flex-wrap: wrap; margin: 8px 0;
+}
+.phonetic-item {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 14px;
+}
+.phonetic-label { font-size: 14px; }
+.audio-btn {
+  background: none; border: none; padding: 2px 4px; font-size: 16px;
+  cursor: pointer; box-shadow: none; border-radius: 50%; transition: all 0.2s;
+  min-width: auto; line-height: 1;
+}
+.audio-btn:hover { background: rgba(108, 92, 231, 0.1); transform: scale(1.2) translateY(0); box-shadow: none; }
+.audio-btn:active { transform: scale(0.95) translateY(0); }
+
+.audio-hint { font-size: 14px; opacity: 0.5; transition: opacity 0.2s; }
+
+.quiz-word-clickable { cursor: pointer; transition: color 0.2s; }
+.quiz-word-clickable:hover { color: var(--primary); }
+.quiz-word-clickable:hover .audio-hint { opacity: 1; }
+
+/* ===== Example Sentences ===== */
+.example-block {
+  margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--primary-light);
+  background: rgba(162, 155, 254, 0.06); border-radius: 0 8px 8px 0;
+}
+.example-en { font-size: 13px; color: var(--text); font-style: italic; margin: 0; line-height: 1.5; }
+.example-cn { font-size: 12px; color: var(--text-light); margin: 3px 0 0; line-height: 1.5; }
+
 .card-meanings { display: flex; flex-direction: column; gap: 12px; text-align: left; }
 .card-meaning { background: var(--bg); padding: 12px; border-radius: 12px; animation: fadeIn 0.4s ease backwards; }
 .card-meaning:nth-child(2) { animation-delay: 0.1s; }
