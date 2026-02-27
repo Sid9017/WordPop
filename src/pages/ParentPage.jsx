@@ -218,16 +218,7 @@ export default function ParentPage() {
               const wrong = prog?.wrong_count || 0;
               const total = correct + wrong;
               const accuracy = total > 0 ? correct / total : -1;
-              // 绿(120) → 黄(60) → 橙(30) → 红(0)
               const hue = accuracy >= 0 ? Math.round(accuracy * 120) : 220;
-              const bgOpacity = total > 0
-                ? Math.min(0.18, 0.06 + (total / 20) * 0.12)
-                : 0.04;
-              const cardStyle = {
-                background: total > 0
-                  ? `linear-gradient(135deg, hsla(${hue}, 80%, 55%, ${bgOpacity}) 0%, hsla(${hue}, 80%, 55%, ${bgOpacity * 0.3}) 50%, transparent 80%)`
-                  : `linear-gradient(135deg, hsla(220, 60%, 60%, 0.04) 0%, transparent 70%)`
-              };
 
               const accPct = total > 0 ? Math.round(accuracy * 100) : -1;
               const badgeStyle = total > 0
@@ -238,7 +229,7 @@ export default function ParentPage() {
                 : "待测试";
 
               return (
-                <div key={w.id} className="word-item" style={cardStyle}>
+                <div key={w.id} className="word-item">
                   <div className="word-item-header" onClick={() => toggleWord(w.id)}>
                     <span className="word-item-arrow">{expandedWords[w.id] ? "▾" : "▸"}</span>
                     <strong className="word-item-word">{w.word}</strong>
