@@ -3,14 +3,10 @@ import { lookupWord, saveWord, getAllWords, deleteWord, playAudio } from "../lib
 import { getInviteToken } from "../lib/family";
 import { SpeakerIcon } from "../components/Icons";
 
-const STAGE_LABELS = {
-  testing: "待测试", mastered: "已掌握",
-};
-
 const STAGE_FILTERS = [
   { value: "all", label: "全部" },
-  { value: "testing", label: "待测试" },
-  { value: "mastered", label: "已掌握" },
+  { value: "untested", label: "待测试" },
+  { value: "tested", label: "已测试" },
 ];
 
 export default function ParentPage() {
@@ -85,7 +81,8 @@ export default function ParentPage() {
     if (stageFilter !== "all") {
       list = list.filter((w) => {
         const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
-        return (p?.stage || "testing") === stageFilter;
+        const total = (p?.correct_count || 0) + (p?.wrong_count || 0);
+        return stageFilter === "tested" ? total > 0 : total === 0;
       });
     }
     if (search.trim()) {
@@ -99,11 +96,12 @@ export default function ParentPage() {
   }, [words, stageFilter, search]);
 
   const stageCounts = useMemo(() => {
-    const counts = { all: words.length };
+    const counts = { all: words.length, tested: 0, untested: 0 };
     for (const w of words) {
       const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
-      const stage = p?.stage || "testing";
-      counts[stage] = (counts[stage] || 0) + 1;
+      const total = (p?.correct_count || 0) + (p?.wrong_count || 0);
+      if (total > 0) counts.tested++;
+      else counts.untested++;
     }
     return counts;
   }, [words]);
