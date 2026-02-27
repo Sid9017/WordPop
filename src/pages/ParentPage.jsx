@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { lookupWord, saveWord, getAllWords, deleteWord, playAudio, clearQuizHistory } from "../lib/api";
+import { lookupWord, saveWord, getAllWords, deleteWord, playAudio } from "../lib/api";
 import { getInviteToken } from "../lib/family";
 import { SpeakerIcon } from "../components/Icons";
 
@@ -314,18 +314,6 @@ export default function ParentPage() {
       </div>
 
       <div className="invite-section">
-        <button
-          className="btn-del"
-          style={{ marginBottom: 16 }}
-          onClick={async () => {
-            if (!confirm("确定清除所有做题记录？此操作不可恢复！")) return;
-            await clearQuizHistory();
-            loadWords();
-            alert("已清除所有做题记录");
-          }}
-        >
-          清除所有做题记录
-        </button>
         <h2>邀请新用户</h2>
         <p style={{ fontSize: 13, color: "#7f8c8d", margin: "8px 0" }}>
           生成邀请链接发给朋友，对方打开后即可创建自己的账号
