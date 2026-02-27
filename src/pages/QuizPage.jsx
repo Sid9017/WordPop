@@ -257,14 +257,35 @@ export default function QuizPage() {
 
   if (phase === "done") {
     const pct = Math.round((score.correct / score.total) * 100);
+    const wrongPct = 100 - pct;
     return (
       <div className="page center">
         {showConfetti && <Confetti />}
         <div className="result-card">
-          <h1>{pct >= 80 ? "太棒了！" : pct >= 60 ? "不错！" : "继续加油！"}</h1>
-          <div className="score-ring"><span className="score-num">{pct}%</span></div>
-          <p>共 {score.total} 题，答对 {score.correct} 题</p>
-          <div className="result-actions"><button className="btn-primary" onClick={() => navigate("/child")}>返回首页</button></div>
+          <h1 className="result-title">{pct >= 80 ? "太棒了！" : pct >= 60 ? "不错！" : "继续加油！"}</h1>
+          <div className="score-ring">
+            <svg viewBox="0 0 120 120" className="score-svg">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" strokeWidth="8" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--success)" strokeWidth="8"
+                strokeDasharray={`${pct * 3.267} ${326.7 - pct * 3.267}`}
+                strokeDashoffset="81.675" strokeLinecap="round" className="score-arc" />
+            </svg>
+            <span className="score-num">{pct}%</span>
+          </div>
+          <div className="result-stats">
+            <div className="result-stat correct"><span className="result-stat-num">{score.correct}</span><span className="result-stat-label">正确</span></div>
+            <div className="result-stat-divider" />
+            <div className="result-stat wrong"><span className="result-stat-num">{score.total - score.correct}</span><span className="result-stat-label">错误</span></div>
+            <div className="result-stat-divider" />
+            <div className="result-stat"><span className="result-stat-num">{score.total}</span><span className="result-stat-label">总题数</span></div>
+          </div>
+          {wrongPct > 0 && (
+            <div className="result-bar">
+              <div className="result-bar-fill correct" style={{ width: `${pct}%` }} />
+              <div className="result-bar-fill wrong" style={{ width: `${wrongPct}%` }} />
+            </div>
+          )}
+          <button className="btn-primary btn-result-back" onClick={() => navigate("/child")}>返回首页</button>
         </div>
       </div>
     );
@@ -272,17 +293,23 @@ export default function QuizPage() {
 
   const q = currentQ;
   const progressPct = ((qIdx + 1) / questions.length) * 100;
+  const correctSoFar = score.correct;
+  const wrongSoFar = score.total - score.correct;
 
   return (
-    <div className="page center">
+    <div className="page center quiz-page">
       {showConfetti && <Confetti />}
-      {phase === "retry" && (
-        <div className="retry-banner">
-          <RefreshIcon size={14} /> 错题重考回合
+
+      <div className="quiz-topbar">
+        <div className="quiz-score-pills">
+          <span className="pill-correct">{correctSoFar}</span>
+          <span className="pill-wrong">{wrongSoFar}</span>
         </div>
-      )}
+        <span className="quiz-counter">{qIdx + 1} / {questions.length}</span>
+        {phase === "retry" && <span className="retry-tag"><RefreshIcon size={12} /> 重考</span>}
+      </div>
+
       <div className="quiz-progress"><div className="quiz-progress-bar" style={{ width: `${progressPct}%` }} /></div>
-      <p className="progress-text">第 {qIdx + 1} / {questions.length} 题</p>
 
       <div className={`quiz-transition ${transitioning ? "out" : "in"}`}>
         {q.type === "match" ? (
@@ -291,18 +318,22 @@ export default function QuizPage() {
           <div className="quiz-card" key={qIdx}>
             {q.type === "cn2en" && (
               <>
-                <p className="quiz-label">看中文，选英文</p>
-                <h2 className="quiz-prompt">{q.display_cn}</h2>
-                {q.meaning.pos && <span className="pos-tag">{q.meaning.pos}</span>}
-                <button className="audio-replay-btn" onClick={() => playAudio(q.word.word, 2)} title="再听一遍">
-                  <SpeakerIcon size={14} /> 再听一遍
-                </button>
+                <div className="quiz-type-badge">看中文 · 选英文</div>
+                <div className="quiz-prompt-area">
+                  <h2 className="quiz-prompt">{q.display_cn}</h2>
+                  <div className="quiz-meta">
+                    {q.meaning.pos && <span className="pos-tag">{q.meaning.pos}</span>}
+                    <button className="audio-chip" onClick={() => playAudio(q.word.word, 2)}>
+                      <SpeakerIcon size={14} /> 听发音
+                    </button>
+                  </div>
+                </div>
                 <div className="options">
                   {q.options.map((opt, i) => (
                     <button key={i}
                       className={`option ${answered ? (opt === q.word.word ? "correct" : opt === selected ? "wrong" : "") : ""}`}
-                      onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}
-                      disabled={false}>
+                      onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}>
+                      <span className="option-letter">{String.fromCharCode(65 + i)}</span>
                       {opt}
                       {answered && opt === q.word.word && <span className="audio-hint"><SpeakerIcon size={14} /></span>}
                     </button>
@@ -312,52 +343,59 @@ export default function QuizPage() {
             )}
             {q.type === "en2cn" && (
               <>
-                <p className="quiz-label">看英文，选中文</p>
-                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
-                  {q.word.word} <span className="audio-hint"><SpeakerIcon size={18} /></span>
-                </h2>
-                <span className="phonetic">{q.word.phonetic}</span>
+                <div className="quiz-type-badge">看英文 · 选中文</div>
+                <div className="quiz-prompt-area">
+                  <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                    {q.word.word} <SpeakerIcon size={18} />
+                  </h2>
+                  <span className="phonetic">{q.word.phonetic}</span>
+                </div>
                 <div className="options">
                   {q.options.map((opt, i) => (
                     <button key={i}
                       className={`option ${answered ? (opt === q.display_cn ? "correct" : opt === selected ? "wrong" : "") : ""}`}
-                      onClick={() => handleAnswer(opt)} disabled={answered}>{opt}</button>
+                      onClick={() => handleAnswer(opt)} disabled={answered}>
+                      <span className="option-letter">{String.fromCharCode(65 + i)}</span>
+                      {opt}
+                    </button>
                   ))}
                 </div>
               </>
             )}
             {q.type === "spell" && (
               <>
-                <p className="quiz-label">拼写单词</p>
-                <div className="spell-definition">
-                  {q.word.meanings?.map((m, i) => (
-                    <div key={i} className="spell-meaning-item">
-                      {m.pos && <span className="pos-tag">{m.pos}</span>}
-                      <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="phonetic-row" style={{ margin: "12px 0" }}>
-                  {q.word.uk_phonetic && (
-                    <span className="phonetic-item">
-                      <span className="phonetic-label">UK</span>
-                      <span className="phonetic">{q.word.uk_phonetic}</span>
-                      <button className="audio-btn" onClick={() => playAudio(q.word.word, 1)}><SpeakerIcon size={14} /></button>
-                    </span>
-                  )}
-                  {q.word.phonetic && (
-                    <span className="phonetic-item">
-                      <span className="phonetic-label">US</span>
-                      <span className="phonetic">{q.word.phonetic}</span>
-                      <button className="audio-btn" onClick={() => playAudio(q.word.word, 2)}><SpeakerIcon size={14} /></button>
-                    </span>
-                  )}
+                <div className="quiz-type-badge">拼写单词</div>
+                <div className="quiz-prompt-area">
+                  <div className="spell-definition">
+                    {q.word.meanings?.map((m, i) => (
+                      <div key={i} className="spell-meaning-item">
+                        {m.pos && <span className="pos-tag">{m.pos}</span>}
+                        <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="phonetic-row">
+                    {q.word.uk_phonetic && (
+                      <span className="phonetic-item">
+                        <span className="phonetic-label">UK</span>
+                        <span className="phonetic">{q.word.uk_phonetic}</span>
+                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 1)}><SpeakerIcon size={14} /></button>
+                      </span>
+                    )}
+                    {q.word.phonetic && (
+                      <span className="phonetic-item">
+                        <span className="phonetic-label">US</span>
+                        <span className="phonetic">{q.word.phonetic}</span>
+                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 2)}><SpeakerIcon size={14} /></button>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="spell-input">
                   <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
                     placeholder="输入英文拼写..." disabled={answered} autoFocus />
-                  {!answered && <button onClick={() => handleAnswer(spellInput)}>确认</button>}
+                  {!answered && <button className="btn-primary" onClick={() => handleAnswer(spellInput)}>确认</button>}
                 </div>
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
