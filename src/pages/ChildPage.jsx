@@ -69,7 +69,7 @@ export default function ChildPage() {
               >
                 <span className="cal-num">{parseInt(day.slice(8))}</span>
                 {isDone && <span className="cal-check">✓</span>}
-                {isToday && quizDone && <span className="cal-tooltip">多学一点</span>}
+                {isToday && quizDone && <span className="cal-tooltip">多背几个</span>}
               </div>
             );
           })}
