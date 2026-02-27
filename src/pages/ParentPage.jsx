@@ -24,8 +24,7 @@ export default function ParentPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [expandedWords, setExpandedWords] = useState({});
-
-
+  const [showCount, setShowCount] = useState(10);
 
   useEffect(() => { loadWords(); }, []);
 
@@ -81,6 +80,7 @@ export default function ParentPage() {
   }
 
   const filtered = useMemo(() => {
+    setShowCount(10);
     let list = words;
     if (stageFilter !== "all") {
       list = list.filter((w) => {
@@ -208,8 +208,9 @@ export default function ParentPage() {
             {search || stageFilter !== "all" ? "没有匹配的单词" : "还没有添加单词"}
           </p>
         ) : (
+          <>
           <div className="word-list">
-            {filtered.map((w) => {
+            {filtered.slice(0, showCount).map((w) => {
               const stage = w.progress?.[0]?.stage || "testing";
               const correct = w.progress?.[0]?.correct_count || 0;
               const wrong = w.progress?.[0]?.wrong_count || 0;
@@ -299,9 +300,16 @@ export default function ParentPage() {
               );
             })}
           </div>
+          {filtered.length > showCount && (
+            <button
+              className="btn-show-more"
+              onClick={() => setShowCount((c) => c + 10)}
+            >
+              显示更多（还有 {filtered.length - showCount} 个）
+            </button>
+          )}
+          </>
         )}
-
-
 
       </div>
 
