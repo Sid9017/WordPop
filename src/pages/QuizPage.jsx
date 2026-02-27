@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio } from "../lib/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Confetti from "../components/Confetti";
-import { SpeakerIcon, RefreshIcon } from "../components/Icons";
+import { SpeakerIcon } from "../components/Icons";
 
 function primaryMeaning(text) {
   if (!text) return "";
@@ -246,7 +246,7 @@ export default function QuizPage() {
     return (
       <div className="page center">
         <div className="empty-state">
-          <span className="empty-icon">{todayDone ? "—" : "—"}</span>
+          <span className="empty-icon">{todayDone ? "🎉" : "📚"}</span>
           <h2>{todayDone ? "今天的闯关已完成" : "暂无待测试的单词"}</h2>
           <p>{todayDone ? "明天再来吧！" : "请让家长先添加单词吧！"}</p>
           <button className="btn-primary" onClick={() => navigate("/child")}>返回</button>
@@ -262,6 +262,7 @@ export default function QuizPage() {
       <div className="page center">
         {showConfetti && <Confetti />}
         <div className="result-card">
+          <span className="result-emoji">{pct >= 80 ? "🏆" : pct >= 60 ? "👍" : "💪"}</span>
           <h1 className="result-title">{pct >= 80 ? "太棒了！" : pct >= 60 ? "不错！" : "继续加油！"}</h1>
           <div className="score-ring">
             <svg viewBox="0 0 120 120" className="score-svg">
@@ -302,11 +303,11 @@ export default function QuizPage() {
 
       <div className="quiz-topbar">
         <div className="quiz-score-pills">
-          <span className="pill-correct">{correctSoFar}</span>
-          <span className="pill-wrong">{wrongSoFar}</span>
+          <span className="pill-correct">✓ {correctSoFar}</span>
+          <span className="pill-wrong">✗ {wrongSoFar}</span>
         </div>
         <span className="quiz-counter">{qIdx + 1} / {questions.length}</span>
-        {phase === "retry" && <span className="retry-tag"><RefreshIcon size={12} /> 重考</span>}
+        {phase === "retry" && <span className="retry-tag">🔄 重考</span>}
       </div>
 
       <div className="quiz-progress"><div className="quiz-progress-bar" style={{ width: `${progressPct}%` }} /></div>
@@ -324,7 +325,7 @@ export default function QuizPage() {
                   <div className="quiz-meta">
                     {q.meaning.pos && <span className="pos-tag">{q.meaning.pos}</span>}
                     <button className="audio-chip" onClick={() => playAudio(q.word.word, 2)}>
-                      <SpeakerIcon size={14} /> 听发音
+                      🔊 听发音
                     </button>
                   </div>
                 </div>
@@ -335,7 +336,7 @@ export default function QuizPage() {
                       onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}>
                       <span className="option-letter">{String.fromCharCode(65 + i)}</span>
                       {opt}
-                      {answered && opt === q.word.word && <span className="audio-hint"><SpeakerIcon size={14} /></span>}
+                      {answered && opt === q.word.word && <span className="audio-hint">🔊</span>}
                     </button>
                   ))}
                 </div>
@@ -345,9 +346,9 @@ export default function QuizPage() {
               <>
                 <div className="quiz-type-badge">看英文 · 选中文</div>
                 <div className="quiz-prompt-area">
-                  <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
-                    {q.word.word} <SpeakerIcon size={18} />
-                  </h2>
+                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                    {q.word.word} <span className="audio-hint">🔊</span>
+                </h2>
                   <span className="phonetic">{q.word.phonetic}</span>
                 </div>
                 <div className="options">
@@ -401,7 +402,7 @@ export default function QuizPage() {
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
                       <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
-                        {q.word.word} <SpeakerIcon size={14} />
+                        {q.word.word} 🔊
                       </span></>
                     )}
                   </p>

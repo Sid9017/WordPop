@@ -52,12 +52,12 @@ export default function HomePage() {
         <>
           <div className="home-buttons">
             <button className="home-btn" onClick={() => navigate("/parent")}>
-              <span className="btn-icon parent-icon">P</span>
+              <span className="btn-icon parent-icon">📖</span>
               <strong>家长入口</strong>
               <small>添加和管理单词</small>
             </button>
             <button className="home-btn" onClick={() => navigate("/child")}>
-              <span className="btn-icon child-icon">S</span>
+              <span className="btn-icon child-icon">🎮</span>
               <strong>学生入口</strong>
               <small>闯关和打卡</small>
             </button>
