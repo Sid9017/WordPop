@@ -60,12 +60,16 @@ export default function ChildPage() {
             return (
               <div
                 key={day}
-                className={`cal-day ${isDone ? "active" : ""} ${isToday ? "today" : ""} ${isToday && !quizDone ? "clickable" : ""}`}
+                className={`cal-day ${isDone ? "active" : ""} ${isToday ? "today" : ""} ${isToday ? "clickable" : ""}`}
                 title={day}
-                onClick={() => { if (isToday) navigate("/child/quiz"); }}
+                onClick={() => {
+                  if (isToday && quizDone) navigate("/child/quiz?extra=1");
+                  else if (isToday) navigate("/child/quiz");
+                }}
               >
                 <span className="cal-num">{parseInt(day.slice(8))}</span>
                 {isDone && <span className="cal-check">✓</span>}
+                {isToday && quizDone && <span className="cal-tooltip">多学一点</span>}
               </div>
             );
           })}

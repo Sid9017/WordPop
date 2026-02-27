@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio } from "../lib/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Confetti from "../components/Confetti";
 import { SpeakerIcon, RefreshIcon } from "../components/Icons";
 
@@ -121,6 +121,8 @@ function MatchGame({ pairs, onComplete }) {
 
 export default function QuizPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isExtra = searchParams.get("extra") === "1";
 
   const [allWords, setAllWords] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -139,18 +141,20 @@ export default function QuizPage() {
 
   useEffect(() => {
     (async () => {
-      const done = await getTodayQuizDone();
-      if (done) {
-        setTodayDone(true);
-        setLoading(false);
-        return;
+      if (!isExtra) {
+        const done = await getTodayQuizDone();
+        if (done) {
+          setTodayDone(true);
+          setLoading(false);
+          return;
+        }
       }
-      const words = await getQuizWords();
+      const words = await getQuizWords({ extra: isExtra });
       setAllWords(words);
       setQuestions(buildQuestions(words));
       setLoading(false);
     })();
-  }, []);
+  }, [isExtra]);
 
   const currentQ = questions[qIdx];
 

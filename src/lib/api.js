@@ -148,11 +148,13 @@ function shuffleArr(arr) {
 // 第1次→1天后复习，第2次→2天，第3次→4天，第4次→1周，第5次→2周，第6次→1月
 const REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30];
 
-export async function getQuizWords() {
+export async function getQuizWords({ extra = false } = {}) {
   const familyId = getFamilyId();
 
-  const todayDone = await getTodayQuizDone();
-  if (todayDone) return [];
+  if (!extra) {
+    const todayDone = await getTodayQuizDone();
+    if (todayDone) return [];
+  }
 
   const { data: allWords } = await supabase
     .from("words")
@@ -167,14 +169,21 @@ export async function getQuizWords() {
     .order("created_at", { ascending: false });
 
   const today = new Date().toISOString().slice(0, 10);
+
+  // extra 模式下排除今天已考过的词
+  const todayQuizzedIds = extra
+    ? new Set((quizHistory || []).filter((q) => q.created_at.slice(0, 10) === today).map((q) => q.word_id))
+    : new Set();
+
   const pastDates = new Set(
     (quizHistory || []).map((q) => q.created_at.slice(0, 10)).filter((d) => d !== today)
   );
   const reviewCount = Math.min(15, pastDates.size * 5);
 
   const quizzedWordIds = new Set((quizHistory || []).map((q) => q.word_id));
-  const neverQuizzed = allWords.filter((w) => !quizzedWordIds.has(w.id));
-  const previouslyQuizzed = allWords.filter((w) => quizzedWordIds.has(w.id));
+  const available = extra ? allWords.filter((w) => !todayQuizzedIds.has(w.id)) : allWords;
+  const neverQuizzed = available.filter((w) => !quizzedWordIds.has(w.id));
+  const previouslyQuizzed = available.filter((w) => quizzedWordIds.has(w.id));
 
   const newWords = shuffleArr(neverQuizzed).slice(0, 5);
 
