@@ -212,7 +212,7 @@ export async function getQuizWords({ extra = false } = {}) {
   });
 
   scored.sort((a, b) => b.priority - a.priority);
-  const reviewWords = scored.slice(0, 15).map((s) => s.word);
+  const reviewWords = scored.slice(0, 25).map((s) => s.word);
 
   return [...newWords, ...reviewWords];
 }

@@ -35,32 +35,38 @@ function makeOptions(correct, allWords, field) {
 }
 
 function buildQuestions(words) {
-  const questions = [];
   const valid = words.filter((w) => w.meanings?.length);
+  const tiers = [20, 15, 10, 5];
+  const target = tiers.find((t) => t <= valid.length) || Math.min(valid.length, 5);
+
   const pool = shuffle([...valid]);
+  const questions = [];
 
-  // 随机抽一些词组成连连看（每组4个词算1题，剩余不足7个时停止）
-  while (pool.length >= 7 && Math.random() < 0.5) {
-    const mw = pool.splice(0, 4);
-    const pairs = mw.map((w) => ({
-      wordId: w.id, meaningId: w.meanings[0].id,
-      en: w.word, cn: primaryMeaning(w.meanings[0].meaning_cn),
-    }));
-    questions.push({
-      type: "match", pairs,
-      wordIds: mw.map((w) => w.id),
-      meaningIds: mw.map((w) => w.meanings[0].id),
-    });
-  }
+  while (questions.length < target && pool.length > 0) {
+    const needed = target - questions.length;
+    const surplus = pool.length - needed;
 
-  for (const w of pool) {
-    const m = w.meanings[0];
-    const display_cn = primaryMeaning(m.meaning_cn);
-    const type = ["cn2en", "en2cn", "spell"][Math.floor(Math.random() * 3)];
-    const q = { word: w, meaning: m, display_cn, type, wordId: w.id, meaningId: m.id };
-    if (type === "cn2en") q.options = makeOptions(w.word, words, "word");
-    if (type === "en2cn") q.options = makeOptions(display_cn, words, "meaning_cn");
-    questions.push(q);
+    if (surplus >= 3 && pool.length >= 4 && Math.random() < 0.25) {
+      const mw = pool.splice(0, 4);
+      const pairs = mw.map((w) => ({
+        wordId: w.id, meaningId: w.meanings[0].id,
+        en: w.word, cn: primaryMeaning(w.meanings[0].meaning_cn),
+      }));
+      questions.push({
+        type: "match", pairs,
+        wordIds: mw.map((w) => w.id),
+        meaningIds: mw.map((w) => w.meanings[0].id),
+      });
+    } else {
+      const w = pool.shift();
+      const m = w.meanings[0];
+      const display_cn = primaryMeaning(m.meaning_cn);
+      const type = ["cn2en", "en2cn", "spell"][Math.floor(Math.random() * 3)];
+      const q = { word: w, meaning: m, display_cn, type, wordId: w.id, meaningId: m.id };
+      if (type === "cn2en") q.options = makeOptions(w.word, words, "word");
+      if (type === "en2cn") q.options = makeOptions(display_cn, words, "meaning_cn");
+      questions.push(q);
+    }
   }
 
   return shuffle(questions);
