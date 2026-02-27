@@ -24,8 +24,8 @@ export default function ParentPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [expandedWords, setExpandedWords] = useState({});
-  const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
+
+
 
   useEffect(() => { loadWords(); }, []);
 
@@ -81,7 +81,6 @@ export default function ParentPage() {
   }
 
   const filtered = useMemo(() => {
-    setPage(1);
     let list = words;
     if (stageFilter !== "all") {
       list = list.filter((w) => {
@@ -98,9 +97,6 @@ export default function ParentPage() {
     }
     return list;
   }, [words, stageFilter, search]);
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const stageCounts = useMemo(() => {
     const counts = { all: words.length };
@@ -213,7 +209,7 @@ export default function ParentPage() {
           </p>
         ) : (
           <div className="word-list">
-            {paged.map((w) => {
+            {filtered.map((w) => {
               const stage = w.progress?.[0]?.stage || "testing";
               const correct = w.progress?.[0]?.correct_count || 0;
               const wrong = w.progress?.[0]?.wrong_count || 0;
@@ -305,13 +301,8 @@ export default function ParentPage() {
           </div>
         )}
 
-        {totalPages > 1 && (
-          <div className="pagination">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-            <span className="pagination-info">{page} / {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</button>
-          </div>
-        )}
+
+
       </div>
 
       <div className="invite-section">
