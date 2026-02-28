@@ -34,8 +34,11 @@ export default function InvitePage() {
   return (
     <div className="page center home">
       <div className="home-logo">
-        <span className="logo-letter">W</span>
-        <h1>WordPop</h1>
+        <div className="logo-text">
+          {"WordPop".split("").map((ch, i) => (
+            <span key={i} className={`logo-letter ${i >= 4 ? "pop" : ""}`} style={{ animationDelay: `${i * 0.15}s` }}>{ch}</span>
+          ))}
+        </div>
       </div>
 
       {done ? (
