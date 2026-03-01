@@ -329,6 +329,9 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   display: inline-flex; align-items: center; gap: 6px; font-size: 14px;
 }
 .phonetic-label { font-size: 12px; font-weight: 700; color: var(--text-light); }
+.phonetic-clickable { cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: background 0.15s; }
+.phonetic-clickable:hover { background: var(--primary-bg); }
+.phonetic-clickable:active { background: #e0dbff; }
 .audio-btn {
   background: none; border: 1px solid var(--border); padding: 4px 6px; font-size: 14px;
   cursor: pointer; border-radius: 6px; transition: all 0.2s;

@@ -2,11 +2,17 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio } from "../lib/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Confetti from "../components/Confetti";
-import { SpeakerIcon } from "../components/Icons";
+
 
 function primaryMeaning(text) {
   if (!text) return "";
   return text.split("\n")[0].replace(/^\d+\.\s*/, "").trim();
+}
+
+function maskWord(text, word) {
+  if (!text || !word) return text;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(escaped, "gi"), "____");
 }
 
 const NAME_PATTERN = /人名|男子名|女子名|男名|女名|姓氏/;
@@ -395,13 +401,7 @@ export default function QuizPage() {
               <>
                 <div className="quiz-type-badge">看中文 · 选英文</div>
                 <div className="quiz-prompt-area">
-                  <h2 className="quiz-prompt">{q.display_cn}</h2>
-                  <div className="quiz-meta">
-                    {q.meaning.pos && <span className="pos-tag">{q.meaning.pos}</span>}
-                    <button className="audio-chip" onClick={() => playAudio(q.word.word, 2)}>
-                      🔊 听发音
-                    </button>
-                  </div>
+                  <h2 className="quiz-prompt">{maskWord(q.display_cn, q.word.word)}</h2>
                 </div>
                 <div className="options">
                   {q.options.map((opt, i) => (
@@ -410,7 +410,6 @@ export default function QuizPage() {
                       onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}>
                       <span className="option-letter">{String.fromCharCode(65 + i)}</span>
                       {opt}
-                      {answered && opt === q.word.word && <span className="audio-hint">🔊</span>}
                     </button>
                   ))}
                 </div>
@@ -421,7 +420,7 @@ export default function QuizPage() {
                 <div className="quiz-type-badge">看英文 · 选中文</div>
                 <div className="quiz-prompt-area">
                 <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
-                    {q.word.word} <span className="audio-hint">🔊</span>
+                    {q.word.word}
                 </h2>
                   <span className="phonetic">{q.word.phonetic}</span>
                 </div>
@@ -445,23 +444,21 @@ export default function QuizPage() {
                     {filterMeanings(q.word).map((m, i) => (
                       <div key={i} className="spell-meaning-item">
                         {m.pos && <span className="pos-tag">{m.pos}</span>}
-                        <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
+                        <span style={{ whiteSpace: "pre-line" }}>{maskWord(m.meaning_cn, q.word.word)}</span>
                       </div>
                     ))}
                   </div>
                   <div className="phonetic-row">
                     {q.word.uk_phonetic && (
-                      <span className="phonetic-item">
+                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word, 1)}>
                         <span className="phonetic-label">UK</span>
                         <span className="phonetic">{q.word.uk_phonetic}</span>
-                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 1)}><SpeakerIcon size={14} /></button>
                       </span>
                     )}
                     {q.word.phonetic && (
-                      <span className="phonetic-item">
+                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word, 2)}>
                         <span className="phonetic-label">US</span>
                         <span className="phonetic">{q.word.phonetic}</span>
-                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 2)}><SpeakerIcon size={14} /></button>
                       </span>
                     )}
                   </div>
@@ -476,7 +473,7 @@ export default function QuizPage() {
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
                       <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
-                        {q.word.word} 🔊
+                        {q.word.word}
                       </span></>
                     )}
                   </p>
@@ -491,23 +488,21 @@ export default function QuizPage() {
                     {filterMeanings(q.word).map((m, i) => (
                       <div key={i} className="spell-meaning-item">
                         {m.pos && <span className="pos-tag">{m.pos}</span>}
-                        <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
+                        <span style={{ whiteSpace: "pre-line" }}>{maskWord(m.meaning_cn, q.word.word)}</span>
                       </div>
                     ))}
                   </div>
                   <div className="phonetic-row">
                     {q.word.uk_phonetic && (
-                      <span className="phonetic-item">
+                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word, 1)}>
                         <span className="phonetic-label">UK</span>
                         <span className="phonetic">{q.word.uk_phonetic}</span>
-                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 1)}><SpeakerIcon size={14} /></button>
                       </span>
                     )}
                     {q.word.phonetic && (
-                      <span className="phonetic-item">
+                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word, 2)}>
                         <span className="phonetic-label">US</span>
                         <span className="phonetic">{q.word.phonetic}</span>
-                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 2)}><SpeakerIcon size={14} /></button>
                       </span>
                     )}
                   </div>
@@ -522,7 +517,7 @@ export default function QuizPage() {
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
                       <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
-                        {q.word.word} 🔊
+                        {q.word.word}
                       </span></>
                     )}
                   </p>

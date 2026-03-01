@@ -19,3 +19,6 @@
 - 2026-03-01 - 前五题（新词）题型改为固定的 `newSpell`：显示中文释义 + 音标 + 发音按钮，学生直接拼写。移除了之前的选择+拼写两阶段逻辑（`newWordSpellActive`/`choiceCorrect`/`spellResult`/`handleNewWordSpell`），大幅简化代码。涉及文件：`src/pages/QuizPage.jsx`（buildQuestions、handleAnswer、UI 渲染）、`src/index.css`（清理旧样式）。
 - 2026-03-01 - 拼写题词卡对齐优化：`.spell-meaning-item` 使用 flex + pos-tag `min-width: 80px` 固定列宽，词性标签列等宽居中、释义列统一左对齐。涉及文件：`src/index.css`。
 - 2026-03-01 - 中选英（cn2en）题目进入时不再自动播放发音，避免提示答案。涉及文件：`src/pages/QuizPage.jsx`。
+- 2026-03-01 - 中选英题干移除词性标签（noun/adjective 等英文）和发音按钮，避免泄露提示。涉及文件：`src/pages/QuizPage.jsx`。
+- 2026-03-01 - 所有需要拼写的题型（cn2en、spell、newSpell）释义中若包含英文原词，自动替换为 `____` 遮盖，防止泄露答案。新增 `maskWord` 工具函数。涉及文件：`src/pages/QuizPage.jsx`。
+- 2026-03-01 - 移除题目中所有小喇叭图标：en2cn 点击单词发音、cn2en 点击选项发音、spell/newSpell 点击音标发音（新增 `.phonetic-clickable` 样式），答题结果中点击单词发音。移除 `SpeakerIcon` 导入。涉及文件：`src/pages/QuizPage.jsx`、`src/index.css`。
