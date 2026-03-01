@@ -289,7 +289,7 @@ export default function QuizPage() {
         resetState();
         setTransitioning(false);
       }, 200);
-    } else if (phase === "quiz" && wrongOnes.length > 0) {
+    } else if (wrongOnes.length > 0) {
       setTransitioning(true);
       setTimeout(() => {
         setPhase("retry");
