@@ -18,3 +18,4 @@
 - 2026-03-01 - 全局间距优化：`.pos-tag` 内边距从 2px→4px 并移除通用 margin-bottom（仅块级上下文保留）；`.quiz-meta` gap 10→12px；`.spell-meaning-item` gap 8→10px；`.phonetic-item` gap 4→6px；`.quiz-label` margin-bottom 4→12px；`.word-item-meaning p` margin 2→4px；`.example` margin-top 4→6px。涉及文件：`src/index.css`。
 - 2026-03-01 - 前五题（新词）题型改为固定的 `newSpell`：显示中文释义 + 音标 + 发音按钮，学生直接拼写。移除了之前的选择+拼写两阶段逻辑（`newWordSpellActive`/`choiceCorrect`/`spellResult`/`handleNewWordSpell`），大幅简化代码。涉及文件：`src/pages/QuizPage.jsx`（buildQuestions、handleAnswer、UI 渲染）、`src/index.css`（清理旧样式）。
 - 2026-03-01 - 拼写题词卡对齐优化：`.spell-meaning-item` 使用 flex + pos-tag `min-width: 80px` 固定列宽，词性标签列等宽居中、释义列统一左对齐。涉及文件：`src/index.css`。
+- 2026-03-01 - 中选英（cn2en）题目进入时不再自动播放发音，避免提示答案。涉及文件：`src/pages/QuizPage.jsx`。

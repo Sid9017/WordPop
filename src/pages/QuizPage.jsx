@@ -151,10 +151,26 @@ function MatchGame({ pairs, onComplete }) {
   );
 }
 
+const STORAGE_PREFIX = "wordpop_quiz_";
+
+function saveQuizProgress(key, data) {
+  try { sessionStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+function loadQuizProgress(key) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearQuizProgress(key) {
+  sessionStorage.removeItem(key);
+}
+
 export default function QuizPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isExtra = searchParams.get("extra") === "1";
+  const storageKey = STORAGE_PREFIX + (isExtra ? "extra" : "daily");
 
   const [allWords, setAllWords] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -170,9 +186,27 @@ export default function QuizPage() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [todayDone, setTodayDone] = useState(false);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     (async () => {
+      const saved = loadQuizProgress(storageKey);
+      if (saved && saved.phase !== "done" && saved.questions?.length) {
+        setAllWords(saved.allWords || []);
+        setQuestions(saved.questions);
+        setQIdx(saved.qIdx || 0);
+        setScore(saved.score || { correct: 0, total: 0 });
+        setWrongOnes(saved.wrongOnes || []);
+        setPhase(saved.phase || "quiz");
+        setAnswered(saved.answered || false);
+        setIsCorrect(saved.isCorrect || false);
+        setSelected(saved.selected ?? null);
+        setSpellInput(saved.spellInput || "");
+        restoredRef.current = true;
+        setLoading(false);
+        return;
+      }
+      clearQuizProgress(storageKey);
       if (!isExtra) {
         const done = await getTodayQuizDone();
         if (done) {
@@ -188,13 +222,25 @@ export default function QuizPage() {
     })();
   }, [isExtra]);
 
+  useEffect(() => {
+    if (loading || !questions.length) return;
+    if (phase === "done") {
+      clearQuizProgress(storageKey);
+      return;
+    }
+    saveQuizProgress(storageKey, {
+      allWords, questions, qIdx, score, wrongOnes, phase,
+      answered, isCorrect, selected, spellInput,
+    });
+  }, [questions, qIdx, score, wrongOnes, phase, answered, isCorrect, selected, spellInput]);
+
   const currentQ = questions[qIdx];
   const lastPlayedRef = useRef("");
 
   useEffect(() => {
     if (!questions.length || phase === "done" || transitioning) return;
     const q = questions[qIdx];
-    if (!q || q.type === "match") return;
+    if (!q || q.type === "match" || q.type === "cn2en") return;
     const key = `${qIdx}-${q.word.word}`;
     if (lastPlayedRef.current === key) return;
     lastPlayedRef.current = key;
