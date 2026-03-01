@@ -192,7 +192,7 @@ export async function getQuizWords({ extra = false } = {}) {
   const newPool = allWords.filter((w) =>
     !quizzedWordIds.has(w.id) && !(extra && todayQuizzedIds.has(w.id))
   );
-  const newWords = shuffleArr(newPool).slice(0, 5);
+  const newWords = shuffleArr(newPool).slice(0, 5).map(w => ({ ...w, _isNew: true }));
 
   // 复习池：所有测试过的词（不排除今天的，让遗忘曲线+错误率决定优先级）
   const reviewPool = allWords.filter((w) => quizzedWordIds.has(w.id));

@@ -9,6 +9,19 @@ function primaryMeaning(text) {
   return text.split("\n")[0].replace(/^\d+\.\s*/, "").trim();
 }
 
+const NAME_PATTERN = /人名|男子名|女子名|男名|女名|姓氏/;
+function isNameMeaning(m) {
+  return NAME_PATTERN.test(m.meaning_cn || "");
+}
+function filterMeanings(word) {
+  const filtered = (word.meanings || []).filter((m) => !isNameMeaning(m));
+  return filtered.length ? filtered : word.meanings || [];
+}
+function isPersonName(word) {
+  if (!word.meanings?.length) return false;
+  return word.meanings.every((m) => isNameMeaning(m));
+}
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -20,11 +33,12 @@ function shuffle(arr) {
 
 function makeOptions(correct, allWords, field) {
   const options = [correct];
+  const nonNameWords = allWords.filter((w) => !isPersonName(w));
   let pool;
   if (field === "word") {
-    pool = allWords.map((w) => w.word).filter((v) => v && v !== correct);
+    pool = nonNameWords.map((w) => w.word).filter((v) => v && v !== correct);
   } else {
-    pool = allWords.map((w) => primaryMeaning(w.meanings?.[0]?.meaning_cn)).filter((v) => v && v !== correct);
+    pool = nonNameWords.map((w) => primaryMeaning(filterMeanings(w)[0]?.meaning_cn)).filter((v) => v && v !== correct);
   }
   for (const v of shuffle(pool)) {
     if (options.length >= 4) break;
@@ -35,41 +49,51 @@ function makeOptions(correct, allWords, field) {
 }
 
 function buildQuestions(words) {
-  const valid = words.filter((w) => w.meanings?.length);
+  const valid = words.filter((w) => w.meanings?.length && !isPersonName(w));
+  const newValid = valid.filter((w) => w._isNew);
+  const reviewValid = valid.filter((w) => !w._isNew);
+
+  const newQuestions = newValid.map((w) => {
+    const m = filterMeanings(w)[0];
+    const display_cn = primaryMeaning(m.meaning_cn);
+    return { word: w, meaning: m, display_cn, type: "newSpell", wordId: w.id, meaningId: m.id };
+  });
+
   const tiers = [20, 15, 10, 5];
   const target = tiers.find((t) => t <= valid.length) || Math.min(valid.length, 5);
+  const reviewTarget = Math.max(target - newQuestions.length, 0);
 
-  const pool = shuffle([...valid]);
-  const questions = [];
+  const pool = shuffle([...reviewValid]);
+  const reviewQuestions = [];
 
-  while (questions.length < target && pool.length > 0) {
-    const needed = target - questions.length;
+  while (reviewQuestions.length < reviewTarget && pool.length > 0) {
+    const needed = reviewTarget - reviewQuestions.length;
     const surplus = pool.length - needed;
 
     if (surplus >= 3 && pool.length >= 4 && Math.random() < 0.25) {
       const mw = pool.splice(0, 4);
       const pairs = mw.map((w) => ({
-        wordId: w.id, meaningId: w.meanings[0].id,
-        en: w.word, cn: primaryMeaning(w.meanings[0].meaning_cn),
+        wordId: w.id, meaningId: filterMeanings(w)[0].id,
+        en: w.word, cn: primaryMeaning(filterMeanings(w)[0].meaning_cn),
       }));
-      questions.push({
+      reviewQuestions.push({
         type: "match", pairs,
         wordIds: mw.map((w) => w.id),
-        meaningIds: mw.map((w) => w.meanings[0].id),
+        meaningIds: mw.map((w) => filterMeanings(w)[0].id),
       });
     } else {
       const w = pool.shift();
-      const m = w.meanings[0];
+      const m = filterMeanings(w)[0];
       const display_cn = primaryMeaning(m.meaning_cn);
       const type = ["cn2en", "en2cn", "spell"][Math.floor(Math.random() * 3)];
       const q = { word: w, meaning: m, display_cn, type, wordId: w.id, meaningId: m.id };
       if (type === "cn2en") q.options = makeOptions(w.word, words, "word");
       if (type === "en2cn") q.options = makeOptions(display_cn, words, "meaning_cn");
-      questions.push(q);
+      reviewQuestions.push(q);
     }
   }
 
-  return shuffle(questions);
+  return [...shuffle(newQuestions), ...shuffle(reviewQuestions)];
 }
 
 function MatchGame({ pairs, onComplete }) {
@@ -184,14 +208,14 @@ export default function QuizPage() {
     let correct = false;
     if (q.type === "cn2en") correct = answer === q.word.word;
     else if (q.type === "en2cn") correct = answer === q.display_cn;
-    else if (q.type === "spell") correct = answer.trim().toLowerCase() === q.word.word.toLowerCase();
+    else if (q.type === "spell" || q.type === "newSpell") correct = answer.trim().toLowerCase() === q.word.word.toLowerCase();
 
     setAnswered(true);
     setIsCorrect(correct);
     setSelected(answer);
     setScore((s) => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }));
     if (!correct) setWrongOnes((prev) => [...prev, q]);
-    await recordQuiz(q.wordId, q.meaningId, q.type, correct);
+    await recordQuiz(q.wordId, q.meaningId, q.type === "newSpell" ? "spell" : q.type, correct);
   }, [answered, currentQ]);
 
   function handleMatchComplete(allCorrect) {
@@ -320,7 +344,7 @@ export default function QuizPage() {
         {q.type === "match" ? (
           <MatchGame key={qIdx} pairs={q.pairs} onComplete={handleMatchComplete} />
         ) : (
-          <div className="quiz-card" key={qIdx}>
+          <div className={`quiz-card quiz-type-${q.type}`} key={qIdx}>
             {q.type === "cn2en" && (
               <>
                 <div className="quiz-type-badge">看中文 · 选英文</div>
@@ -372,7 +396,53 @@ export default function QuizPage() {
                 <div className="quiz-type-badge">拼写单词</div>
                 <div className="quiz-prompt-area">
                   <div className="spell-definition">
-                    {q.word.meanings?.map((m, i) => (
+                    {filterMeanings(q.word).map((m, i) => (
+                      <div key={i} className="spell-meaning-item">
+                        {m.pos && <span className="pos-tag">{m.pos}</span>}
+                        <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="phonetic-row">
+                    {q.word.uk_phonetic && (
+                      <span className="phonetic-item">
+                        <span className="phonetic-label">UK</span>
+                        <span className="phonetic">{q.word.uk_phonetic}</span>
+                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 1)}><SpeakerIcon size={14} /></button>
+                      </span>
+                    )}
+                    {q.word.phonetic && (
+                      <span className="phonetic-item">
+                        <span className="phonetic-label">US</span>
+                        <span className="phonetic">{q.word.phonetic}</span>
+                        <button className="audio-btn" onClick={() => playAudio(q.word.word, 2)}><SpeakerIcon size={14} /></button>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="spell-input">
+                  <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
+                    placeholder="输入英文拼写..." disabled={answered} autoFocus />
+                  {!answered && <button className="btn-primary" onClick={() => handleAnswer(spellInput)}>确认</button>}
+                </div>
+                {answered && (
+                  <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
+                    {isCorrect ? "正确！" : (
+                      <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                        {q.word.word} 🔊
+                      </span></>
+                    )}
+                  </p>
+                )}
+              </>
+            )}
+            {q.type === "newSpell" && (
+              <>
+                <div className="quiz-type-badge">🆕 新词 · 拼写</div>
+                <div className="quiz-prompt-area">
+                  <div className="spell-definition">
+                    {filterMeanings(q.word).map((m, i) => (
                       <div key={i} className="spell-meaning-item">
                         {m.pos && <span className="pos-tag">{m.pos}</span>}
                         <span style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</span>
