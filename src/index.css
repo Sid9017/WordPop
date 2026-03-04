@@ -453,59 +453,14 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 .spell-result.correct { color: var(--success); background: var(--success-bg); }
 .spell-result.wrong { color: var(--danger); background: var(--danger-bg); }
 
-/* ===== Letter Boxes ===== */
-.letter-boxes {
-  display: flex; flex-wrap: wrap; justify-content: center;
-  gap: 6px; margin-top: 24px; padding: 0 4px;
+/* Spell correct/wrong feedback */
+.spell-input.spell-correct input {
+  color: var(--success); border-color: var(--success);
+  background: var(--success-bg); font-weight: 700;
 }
-.letter-box {
-  width: 34px; height: 46px; position: relative;
-}
-.letter-input {
-  width: 100% !important; height: 100%; text-align: center;
-  font-size: 22px; font-weight: 700; letter-spacing: 0;
-  border: none !important; border-bottom: 3px solid var(--border) !important;
-  border-radius: 0 !important; background: transparent !important;
-  padding: 0 !important; outline: none; color: var(--text);
-  caret-color: var(--primary); transition: border-color 0.2s;
-}
-.letter-input:focus {
-  border-bottom-color: var(--primary) !important;
-  box-shadow: none !important; background: transparent !important;
-}
-.letter-input:disabled { opacity: 1; }
-
-.letter-box.correct .letter-input {
-  color: var(--success); border-bottom-color: var(--success) !important;
-  animation: letterCorrect 0.4s ease;
-}
-.letter-box.wrong .letter-input {
-  color: var(--danger); border-bottom-color: var(--danger) !important;
-  animation: letterWrong 0.4s ease;
-}
-
-.letter-boxes.celebrate {
-  animation: celebrateBoxes 0.6s ease;
-}
-.letter-boxes.has-wrong {
-  animation: wrongShake 0.4s ease;
-}
-
-@keyframes letterCorrect {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
-@keyframes letterWrong {
-  0%, 100% { transform: translateY(0); }
-  25% { transform: translateY(-3px); }
-  75% { transform: translateY(3px); }
-}
-@keyframes celebrateBoxes {
-  0% { transform: scale(1); }
-  30% { transform: scale(1.06); }
-  60% { transform: scale(0.97); }
-  100% { transform: scale(1); }
+.spell-input.spell-wrong input {
+  color: var(--danger); border-color: var(--danger);
+  background: var(--danger-bg); animation: wrongShake 0.35s ease;
 }
 
 /* newSpell shares spell styles */
@@ -616,18 +571,22 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 .match-item.left { background: #f0edff; border-color: #e2ddf8; }
 .match-item.right { background: #e8f5f0; border-color: #cce8dd; }
-.match-item.left:not(.matched):not(.wrong):hover { border-color: var(--primary); transform: none !important; }
-.match-item.right:not(.matched):not(.wrong):hover { border-color: var(--success); transform: none !important; }
+.match-item.left:not(.linked):not(.correct):not(.wrong):hover { border-color: var(--primary); transform: none !important; }
+.match-item.right:not(.linked):not(.correct):not(.wrong):hover { border-color: var(--success); transform: none !important; }
 .match-item.active {
   border-color: var(--primary); background: #e0dbff;
   animation: none;
 }
-.match-item.matched {
+.match-item.linked {
+  background: #e2e8f0; color: var(--text-light); border-color: #d1d5db;
+  opacity: 0.7;
+}
+.match-item.correct {
   background: var(--success); color: #fff; border-color: var(--success);
-  opacity: 0.55; animation: none;
+  animation: none;
 }
 .match-item.wrong {
-  border-color: var(--danger); background: var(--danger-bg);
+  border-color: var(--danger); background: var(--danger-bg); color: var(--danger);
   animation: wrongShake 0.35s ease;
 }
 .match-item:disabled { cursor: default; }
@@ -677,8 +636,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   .quiz-prompt-area { margin-bottom: 24px; }
   .option { padding: 14px 16px; font-size: 14px; }
   .option-letter { width: 26px; height: 26px; font-size: 11px; }
-  .letter-box { width: 30px; height: 42px; }
-  .letter-input { font-size: 19px; }
+  .spell-input input { font-size: 18px; letter-spacing: 2px; }
   .match-grid { gap: 8px 10px; }
   .match-item { padding: 12px 8px; font-size: 14px; min-height: 44px; }
   .result-card { padding: 36px 20px 28px; }

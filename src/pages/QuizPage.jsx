@@ -106,28 +106,53 @@ function MatchGame({ pairs, onComplete }) {
   const [leftItems] = useState(() => shuffle(pairs.map((p) => ({ id: p.wordId, text: p.cn, key: p.en }))));
   const [rightItems] = useState(() => shuffle(pairs.map((p) => ({ id: p.wordId, text: p.en, key: p.en }))));
   const [selLeft, setSelLeft] = useState(null);
-  const [matched, setMatched] = useState([]);
-  const [wrongPair, setWrongPair] = useState(null);
-  const [mistakes, setMistakes] = useState(0);
+  const [links, setLinks] = useState([]);
+  const [judged, setJudged] = useState(false);
+  const [results, setResults] = useState({});
+
+  const linkedLeftKeys = links.map((l) => l.leftKey);
+  const linkedRightKeys = links.map((l) => l.rightKey);
 
   function clickLeft(item) {
-    if (matched.includes(item.key)) return;
+    if (judged || linkedLeftKeys.includes(item.key)) return;
     setSelLeft(item);
-    setWrongPair(null);
   }
 
   function clickRight(item) {
-    if (!selLeft || matched.includes(item.key)) return;
-    if (selLeft.key === item.key) {
-      const m = [...matched, item.key];
-      setMatched(m);
-      setSelLeft(null);
-      if (m.length === pairs.length) setTimeout(() => onComplete(mistakes === 0), 400);
-    } else {
-      setMistakes((n) => n + 1);
-      setWrongPair({ left: selLeft.key, right: item.key });
-      setTimeout(() => { setWrongPair(null); setSelLeft(null); }, 600);
+    if (judged || !selLeft || linkedRightKeys.includes(item.key)) return;
+    const newLinks = [...links, { leftKey: selLeft.key, rightKey: item.key }];
+    setLinks(newLinks);
+    setSelLeft(null);
+    if (newLinks.length === pairs.length) {
+      setTimeout(() => judge(newLinks), 350);
     }
+  }
+
+  function judge(finalLinks) {
+    const res = {};
+    let allCorrect = true;
+    for (const link of finalLinks) {
+      const isCorrect = link.leftKey === link.rightKey;
+      res[link.leftKey] = isCorrect ? "correct" : "wrong";
+      if (!isCorrect) allCorrect = false;
+    }
+    setResults(res);
+    setJudged(true);
+    setTimeout(() => onComplete(allCorrect), 1200);
+  }
+
+  function getLeftStatus(key) {
+    if (!judged) return linkedLeftKeys.includes(key) ? "linked" : "";
+    return results[key] || "";
+  }
+
+  function getRightStatus(key) {
+    if (!judged) {
+      const link = links.find((l) => l.rightKey === key);
+      return link ? "linked" : "";
+    }
+    const link = links.find((l) => l.rightKey === key);
+    return link ? results[link.leftKey] || "" : "";
   }
 
   return (
@@ -139,104 +164,20 @@ function MatchGame({ pairs, onComplete }) {
           return (
             <div className="match-row" key={i}>
               <button
-                className={`match-item left ${matched.includes(left.key) ? "matched" : ""} ${selLeft?.key === left.key ? "active" : ""} ${wrongPair?.left === left.key ? "wrong" : ""}`}
-                onClick={() => clickLeft(left)} disabled={matched.includes(left.key)}>
+                className={`match-item left ${getLeftStatus(left.key)} ${selLeft?.key === left.key ? "active" : ""}`}
+                onClick={() => clickLeft(left)} disabled={judged || linkedLeftKeys.includes(left.key)}>
                 {left.text}
               </button>
               <button
-                className={`match-item right ${matched.includes(right.key) ? "matched" : ""} ${wrongPair?.right === right.key ? "wrong" : ""}`}
-                onClick={() => clickRight(right)} disabled={matched.includes(right.key)}>
+                className={`match-item right ${getRightStatus(right.key)}`}
+                onClick={() => clickRight(right)} disabled={judged || linkedRightKeys.includes(right.key)}>
                 {right.text}
               </button>
             </div>
           );
         })}
       </div>
-      <p className="match-progress">已配对 {matched.length} / {pairs.length}</p>
-    </div>
-  );
-}
-
-function LetterBoxes({ word, onComplete, answered, initialValue }) {
-  const len = word.length;
-  const [letters, setLetters] = useState(() => {
-    if (initialValue) {
-      const arr = initialValue.toLowerCase().split("").slice(0, len);
-      while (arr.length < len) arr.push("");
-      return arr;
-    }
-    return Array(len).fill("");
-  });
-  const refs = useRef([]);
-  const doneRef = useRef(answered);
-
-  function handleChange(idx, e) {
-    if (doneRef.current) return;
-    const raw = e.target.value.replace(/[^a-zA-Z\-']/g, "");
-    if (!raw) return;
-    const char = raw.slice(-1).toLowerCase();
-    const next = [...letters];
-    next[idx] = char;
-    setLetters(next);
-    if (idx < len - 1) {
-      const nextEmpty = next.findIndex((l, i) => i > idx && l === "");
-      refs.current[nextEmpty !== -1 ? nextEmpty : idx + 1]?.focus();
-    }
-    if (next.every(l => l !== "")) {
-      doneRef.current = true;
-      setTimeout(() => onComplete(next.join("")), 400);
-    }
-  }
-
-  function handleKeyDown(idx, e) {
-    if (doneRef.current) return;
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      const next = [...letters];
-      if (next[idx]) {
-        next[idx] = "";
-        setLetters(next);
-      } else if (idx > 0) {
-        next[idx - 1] = "";
-        setLetters(next);
-        refs.current[idx - 1]?.focus();
-      }
-    } else if (e.key === "ArrowLeft" && idx > 0) {
-      refs.current[idx - 1]?.focus();
-    } else if (e.key === "ArrowRight" && idx < len - 1) {
-      refs.current[idx + 1]?.focus();
-    }
-  }
-
-  function getStatus(idx) {
-    if (!answered) return "";
-    if (!letters[idx]) return "wrong";
-    return letters[idx].toLowerCase() === word[idx].toLowerCase() ? "correct" : "wrong";
-  }
-
-  const allCorrect = answered && letters.join("").toLowerCase() === word.toLowerCase();
-
-  return (
-    <div className={`letter-boxes ${answered ? (allCorrect ? "celebrate" : "has-wrong") : ""}`}>
-      {Array.from({ length: len }).map((_, i) => (
-        <div key={i} className={`letter-box ${getStatus(i)}`}>
-          <input
-            ref={el => refs.current[i] = el}
-            type="text"
-            value={letters[i]}
-            onChange={e => handleChange(i, e)}
-            onKeyDown={e => handleKeyDown(i, e)}
-            onFocus={e => e.target.select()}
-            disabled={answered}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            autoFocus={!answered && i === 0}
-            className="letter-input"
-          />
-        </div>
-      ))}
+      <p className="match-progress">已配对 {links.length} / {pairs.length}</p>
     </div>
   );
 }
@@ -547,13 +488,14 @@ export default function QuizPage() {
                     )}
                   </div>
                 </div>
-                <LetterBoxes
-                  key={qIdx}
-                  word={q.word.word}
-                  onComplete={(w) => { setSpellInput(w); handleAnswer(w); }}
-                  answered={answered}
-                  initialValue={spellInput}
-                />
+                <div className={`spell-input ${answered ? (isCorrect ? "spell-correct" : "spell-wrong") : ""}`}>
+                  <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
+                    placeholder="输入英文拼写..." disabled={answered} autoFocus
+                    autoComplete="one-time-code" autoCorrect="off" autoCapitalize="off"
+                    spellCheck={false} data-form-type="other" />
+                  {!answered && <button className="btn-primary" onClick={() => handleAnswer(spellInput)}>确认</button>}
+                </div>
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
@@ -592,13 +534,14 @@ export default function QuizPage() {
                     )}
                   </div>
                 </div>
-                <LetterBoxes
-                  key={qIdx}
-                  word={q.word.word}
-                  onComplete={(w) => { setSpellInput(w); handleAnswer(w); }}
-                  answered={answered}
-                  initialValue={spellInput}
-                />
+                <div className={`spell-input ${answered ? (isCorrect ? "spell-correct" : "spell-wrong") : ""}`}>
+                  <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
+                    placeholder="输入英文拼写..." disabled={answered} autoFocus
+                    autoComplete="one-time-code" autoCorrect="off" autoCapitalize="off"
+                    spellCheck={false} data-form-type="other" />
+                  {!answered && <button className="btn-primary" onClick={() => handleAnswer(spellInput)}>确认</button>}
+                </div>
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (

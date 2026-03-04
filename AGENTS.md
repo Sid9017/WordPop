@@ -22,4 +22,5 @@
 - 2026-03-01 - 中选英题干移除词性标签（noun/adjective 等英文）和发音按钮，避免泄露提示。涉及文件：`src/pages/QuizPage.jsx`。
 - 2026-03-01 - 所有需要拼写的题型（cn2en、spell、newSpell）释义中若包含英文原词，自动替换为 `____` 遮盖，防止泄露答案。新增 `maskWord` 工具函数。涉及文件：`src/pages/QuizPage.jsx`。
 - 2026-03-01 - 移除题目中所有小喇叭图标：en2cn 点击单词发音、cn2en 点击选项发音、spell/newSpell 点击音标发音（新增 `.phonetic-clickable` 样式），答题结果中点击单词发音。移除 `SpeakerIcon` 导入。涉及文件：`src/pages/QuizPage.jsx`、`src/index.css`。
-- 2026-03-04 - 拼写题（spell/newSpell）改为逐字母下划线填写模式：每个字母一个输入框，防止输入法候选词提示泄露答案（`autoComplete/autoCorrect/autoCapitalize` 关闭 + 单字符输入框无上下文）。全部填完自动判定：全对字母变绿+弹跳庆祝动效，有错则错误字母标红+震动，并显示正确答案。新增 `LetterBoxes` 组件及配套 CSS（`.letter-boxes`/`.letter-box`/`.letter-input`/动画 `letterCorrect`/`letterWrong`/`celebrateBoxes`）。涉及文件：`src/pages/QuizPage.jsx`、`src/index.css`。
+- 2026-03-04 - 拼写题（spell/newSpell）改为单输入框 + 防输入法候选词提示：使用 `autoComplete="one-time-code"` / `autoCorrect="off"` / `autoCapitalize="off"` / `spellCheck={false}` / `data-form-type="other"` 组合属性彻底禁止系统输入提示。正确时输入框变绿，错误时输入框变红+震动并显示正确答案。移除了之前的 LetterBoxes 逐字母组件。涉及文件：`src/pages/QuizPage.jsx`、`src/index.css`。
+- 2026-03-04 - 连连看改为全部连完后统一判定：配对时仅标灰（`.linked`），不即时判对错；全部配完后延迟 350ms 统一判定，正确的变绿（`.correct`），错误的变红+震动（`.wrong`），再延迟 1.2s 后进入下一题。涉及文件：`src/pages/QuizPage.jsx`（MatchGame 重写）、`src/index.css`（新增 `.linked`/`.correct` 状态样式）。
