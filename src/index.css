@@ -453,6 +453,61 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 .spell-result.correct { color: var(--success); background: var(--success-bg); }
 .spell-result.wrong { color: var(--danger); background: var(--danger-bg); }
 
+/* ===== Letter Boxes ===== */
+.letter-boxes {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 6px; margin-top: 24px; padding: 0 4px;
+}
+.letter-box {
+  width: 34px; height: 46px; position: relative;
+}
+.letter-input {
+  width: 100% !important; height: 100%; text-align: center;
+  font-size: 22px; font-weight: 700; letter-spacing: 0;
+  border: none !important; border-bottom: 3px solid var(--border) !important;
+  border-radius: 0 !important; background: transparent !important;
+  padding: 0 !important; outline: none; color: var(--text);
+  caret-color: var(--primary); transition: border-color 0.2s;
+}
+.letter-input:focus {
+  border-bottom-color: var(--primary) !important;
+  box-shadow: none !important; background: transparent !important;
+}
+.letter-input:disabled { opacity: 1; }
+
+.letter-box.correct .letter-input {
+  color: var(--success); border-bottom-color: var(--success) !important;
+  animation: letterCorrect 0.4s ease;
+}
+.letter-box.wrong .letter-input {
+  color: var(--danger); border-bottom-color: var(--danger) !important;
+  animation: letterWrong 0.4s ease;
+}
+
+.letter-boxes.celebrate {
+  animation: celebrateBoxes 0.6s ease;
+}
+.letter-boxes.has-wrong {
+  animation: wrongShake 0.4s ease;
+}
+
+@keyframes letterCorrect {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes letterWrong {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-3px); }
+  75% { transform: translateY(3px); }
+}
+@keyframes celebrateBoxes {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.06); }
+  60% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
 /* newSpell shares spell styles */
 .quiz-type-newSpell .quiz-type-badge { color: #e17055; }
 
@@ -622,7 +677,8 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   .quiz-prompt-area { margin-bottom: 24px; }
   .option { padding: 14px 16px; font-size: 14px; }
   .option-letter { width: 26px; height: 26px; font-size: 11px; }
-  .spell-input input { font-size: 18px; letter-spacing: 2px; }
+  .letter-box { width: 30px; height: 42px; }
+  .letter-input { font-size: 19px; }
   .match-grid { gap: 8px 10px; }
   .match-item { padding: 12px 8px; font-size: 14px; min-height: 44px; }
   .result-card { padding: 36px 20px 28px; }

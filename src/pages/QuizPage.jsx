@@ -157,6 +157,90 @@ function MatchGame({ pairs, onComplete }) {
   );
 }
 
+function LetterBoxes({ word, onComplete, answered, initialValue }) {
+  const len = word.length;
+  const [letters, setLetters] = useState(() => {
+    if (initialValue) {
+      const arr = initialValue.toLowerCase().split("").slice(0, len);
+      while (arr.length < len) arr.push("");
+      return arr;
+    }
+    return Array(len).fill("");
+  });
+  const refs = useRef([]);
+  const doneRef = useRef(answered);
+
+  function handleChange(idx, e) {
+    if (doneRef.current) return;
+    const raw = e.target.value.replace(/[^a-zA-Z\-']/g, "");
+    if (!raw) return;
+    const char = raw.slice(-1).toLowerCase();
+    const next = [...letters];
+    next[idx] = char;
+    setLetters(next);
+    if (idx < len - 1) {
+      const nextEmpty = next.findIndex((l, i) => i > idx && l === "");
+      refs.current[nextEmpty !== -1 ? nextEmpty : idx + 1]?.focus();
+    }
+    if (next.every(l => l !== "")) {
+      doneRef.current = true;
+      setTimeout(() => onComplete(next.join("")), 400);
+    }
+  }
+
+  function handleKeyDown(idx, e) {
+    if (doneRef.current) return;
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      const next = [...letters];
+      if (next[idx]) {
+        next[idx] = "";
+        setLetters(next);
+      } else if (idx > 0) {
+        next[idx - 1] = "";
+        setLetters(next);
+        refs.current[idx - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft" && idx > 0) {
+      refs.current[idx - 1]?.focus();
+    } else if (e.key === "ArrowRight" && idx < len - 1) {
+      refs.current[idx + 1]?.focus();
+    }
+  }
+
+  function getStatus(idx) {
+    if (!answered) return "";
+    if (!letters[idx]) return "wrong";
+    return letters[idx].toLowerCase() === word[idx].toLowerCase() ? "correct" : "wrong";
+  }
+
+  const allCorrect = answered && letters.join("").toLowerCase() === word.toLowerCase();
+
+  return (
+    <div className={`letter-boxes ${answered ? (allCorrect ? "celebrate" : "has-wrong") : ""}`}>
+      {Array.from({ length: len }).map((_, i) => (
+        <div key={i} className={`letter-box ${getStatus(i)}`}>
+          <input
+            ref={el => refs.current[i] = el}
+            type="text"
+            value={letters[i]}
+            onChange={e => handleChange(i, e)}
+            onKeyDown={e => handleKeyDown(i, e)}
+            onFocus={e => e.target.select()}
+            disabled={answered}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoFocus={!answered && i === 0}
+            className="letter-input"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const STORAGE_PREFIX = "wordpop_quiz_";
 
 function saveQuizProgress(key, data) {
@@ -463,12 +547,13 @@ export default function QuizPage() {
                     )}
                   </div>
                 </div>
-                <div className="spell-input">
-                  <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
-                    placeholder="输入英文拼写..." disabled={answered} autoFocus />
-                  {!answered && <button className="btn-primary" onClick={() => handleAnswer(spellInput)}>确认</button>}
-                </div>
+                <LetterBoxes
+                  key={qIdx}
+                  word={q.word.word}
+                  onComplete={(w) => { setSpellInput(w); handleAnswer(w); }}
+                  answered={answered}
+                  initialValue={spellInput}
+                />
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
@@ -507,12 +592,13 @@ export default function QuizPage() {
                     )}
                   </div>
                 </div>
-                <div className="spell-input">
-                  <input value={spellInput} onChange={(e) => setSpellInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !answered && handleAnswer(spellInput)}
-                    placeholder="输入英文拼写..." disabled={answered} autoFocus />
-                  {!answered && <button className="btn-primary" onClick={() => handleAnswer(spellInput)}>确认</button>}
-                </div>
+                <LetterBoxes
+                  key={qIdx}
+                  word={q.word.word}
+                  onComplete={(w) => { setSpellInput(w); handleAnswer(w); }}
+                  answered={answered}
+                  initialValue={spellInput}
+                />
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
