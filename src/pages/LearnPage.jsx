@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getQuizWords, playAudio } from "../lib/api";
 import { SpeakerIcon } from "../components/Icons";
@@ -11,8 +11,11 @@ export default function LearnPage() {
   const [words, setWords] = useState([]);
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(true);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     (async () => {
       const all = await getQuizWords({ extra: true });
       const newWords = all.filter((w) => w._isNew);
@@ -21,8 +24,15 @@ export default function LearnPage() {
     })();
   }, []);
 
+  const lastPlayedRef = useRef("");
   useEffect(() => {
-    if (words.length > 0) playAudio(words[idx].word, 2);
+    if (words.length > 0) {
+      const key = `${idx}-${words[idx].word}`;
+      if (lastPlayedRef.current !== key) {
+        lastPlayedRef.current = key;
+        playAudio(words[idx].word, 2);
+      }
+    }
   }, [idx, words]);
 
   if (loading) return <div className="page center"><p className="loading-text">加载中...</p></div>;

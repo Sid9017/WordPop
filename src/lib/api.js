@@ -9,7 +9,15 @@ const POS_MAP = {
 
 // ===== 查词 =====
 
+let _lastAudioKey = "";
+let _lastAudioTime = 0;
+
 export function playAudio(word, type = 2) {
+  const key = `${word}-${type}`;
+  const now = Date.now();
+  if (key === _lastAudioKey && now - _lastAudioTime < 500) return;
+  _lastAudioKey = key;
+  _lastAudioTime = now;
   const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${type}`;
   const audio = new Audio(url);
   audio.play().catch(() => {});
@@ -201,6 +209,28 @@ function shuffleArr(arr) {
   return a;
 }
 
+function hashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
+}
+
+function seededShuffle(arr, seed) {
+  const a = [...arr];
+  let s = seed;
+  function rand() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0x100000000;
+  }
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // 艾宾浩斯遗忘曲线复习间隔（天）
 // 第1次→1天后复习，第2次→2天，第3次→4天，第4次→1周，第5次→2周，第6次→1月
 const REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30];
@@ -263,11 +293,17 @@ export async function getQuizWords({ extra = false } = {}) {
     (quizHistory || []).filter((q) => q.created_at.slice(0, 10) === today).map((q) => q.word_id)
   );
 
-  // 新词池：从未测试过的词（extra 模式下也排除今天刚作为新词测过的）
-  const newPool = allWords.filter((w) =>
-    !quizzedWordIds.has(w.id) && !(extra && todayQuizzedIds.has(w.id))
-  );
-  const newWords = shuffleArr(newPool).slice(0, 5).map(w => ({ ...w, _isNew: true }));
+  const sorted = [...allWords].sort((a, b) => a.id.localeCompare(b.id));
+  const seed = hashSeed(today + familyId);
+  const shuffled = seededShuffle(sorted, seed);
+
+  const newWords = [];
+  for (const w of shuffled) {
+    if (newWords.length >= 5) break;
+    if (quizzedWordIds.has(w.id)) continue;
+    if (extra && todayQuizzedIds.has(w.id)) continue;
+    newWords.push({ ...w, _isNew: true });
+  }
 
   // 复习池：所有测试过的词（不排除今天的，让遗忘曲线+错误率决定优先级）
   const reviewPool = allWords.filter((w) => quizzedWordIds.has(w.id));

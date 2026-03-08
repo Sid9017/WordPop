@@ -185,12 +185,15 @@ function MatchGame({ pairs, onComplete }) {
 const STORAGE_PREFIX = "wordpop_quiz_";
 
 function saveQuizProgress(key, data) {
-  try { sessionStorage.setItem(key, JSON.stringify(data)); } catch {}
+  try { sessionStorage.setItem(key, JSON.stringify({ ...data, _date: new Date().toISOString().slice(0, 10) })); } catch {}
 }
 function loadQuizProgress(key) {
   try {
     const raw = sessionStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed._date !== new Date().toISOString().slice(0, 10)) return null;
+    return parsed;
   } catch { return null; }
 }
 function clearQuizProgress(key) {
@@ -218,8 +221,11 @@ export default function QuizPage() {
   const [transitioning, setTransitioning] = useState(false);
   const [todayDone, setTodayDone] = useState(false);
   const restoredRef = useRef(false);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     (async () => {
       const saved = loadQuizProgress(storageKey);
       if (saved && saved.phase !== "done" && saved.questions?.length) {
