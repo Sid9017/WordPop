@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
-import { lookupWord, saveWord, getAllWords, deleteWord, playAudio } from "../lib/api";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { lookupWord, saveWord, getAllWords, deleteWord, playAudio, batchLookupWords } from "../lib/api";
 import { getInviteToken } from "../lib/family";
 import { SpeakerIcon } from "../components/Icons";
+import WordBankPanel from "../components/WordBankPanel";
+import { startGlobalImport, useGlobalImportTask } from "../components/ImportProgress";
 
 const STAGE_FILTERS = [
   { value: "all", label: "全部" },
@@ -9,10 +11,27 @@ const STAGE_FILTERS = [
   { value: "tested", label: "已测试" },
 ];
 
+function MeaningLines({ text }) {
+  const lines = (text || "").split("\n").filter(Boolean);
+  if (lines.length <= 1) return <p className="meaning-line">{text}</p>;
+  return lines.map((line, i) => {
+    const alpha = 1 - 0.5 * (i / (lines.length - 1));
+    return <p key={i} className="meaning-line" style={{ color: `rgba(26, 26, 46, ${alpha})` }}>{line}</p>;
+  });
+}
+
+function parseInputWords(text) {
+  return text
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter((s) => s && /^[a-zA-Z\s\-']+$/.test(s));
+}
+
 export default function ParentPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [batchResults, setBatchResults] = useState(null);
   const [words, setWords] = useState([]);
   const [msg, setMsg] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -21,23 +40,59 @@ export default function ParentPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [expandedWords, setExpandedWords] = useState({});
   const [showCount, setShowCount] = useState(10);
+  const [showBankPanel, setShowBankPanel] = useState(false);
+  const dropdownRef = useRef(null);
 
-  useEffect(() => { loadWords(); }, []);
+  const importTask = useGlobalImportTask();
 
-  async function loadWords() {
+  const loadWords = useCallback(async () => {
     const data = await getAllWords();
     setWords(data);
-  }
+  }, []);
+
+  useEffect(() => { loadWords(); }, [loadWords]);
+
+  useEffect(() => {
+    if (importTask && !importTask.active) loadWords();
+  }, [importTask?.active, loadWords]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowBankPanel(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const inputWords = parseInputWords(input);
+  const isBatchMode = inputWords.length > 1;
 
   async function handleLookup() {
     if (!input.trim()) return;
     setLoading(true);
     setMsg("");
-    try {
-      const data = await lookupWord(input.trim());
-      setPreview(data);
-    } catch {
-      setMsg("查询失败，请检查单词拼写");
+    setPreview(null);
+    setBatchResults(null);
+
+    if (isBatchMode) {
+      try {
+        const results = await batchLookupWords(inputWords, (progress) => {
+          setMsg(`查询中... 缓存命中 ${progress.cached}，剩余 ${progress.remaining}${progress.current ? ` (${progress.current})` : ""}`);
+        });
+        setBatchResults(results);
+        setMsg("");
+      } catch {
+        setMsg("批量查询失败");
+      }
+    } else {
+      try {
+        const data = await lookupWord(input.trim());
+        setPreview(data);
+      } catch {
+        setMsg("查询失败，请检查单词拼写");
+      }
     }
     setLoading(false);
   }
@@ -55,6 +110,23 @@ export default function ParentPage() {
       setMsg("保存失败: " + err.message);
     }
     setLoading(false);
+  }
+
+  function handleBatchImport() {
+    if (!batchResults?.length) return;
+    const existingSet = new Set(words.map((w) => w.word?.toLowerCase()));
+    const newWords = batchResults.filter((w) => !existingSet.has(w.word.toLowerCase()));
+    if (!newWords.length) {
+      setMsg("所有单词已存在，无需导入");
+      return;
+    }
+    startGlobalImport(newWords);
+    setBatchResults(null);
+    setInput("");
+  }
+
+  function handleBankImport(bankWords) {
+    startGlobalImport(bankWords);
   }
 
   function updateMeaning(idx, field, value) {
@@ -110,20 +182,67 @@ export default function ParentPage() {
     <div className="page">
       <h1 className="page-title">家长管理</h1>
 
-      <div className="input-row">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-          placeholder="输入英文单词..."
-          disabled={loading}
-        />
-        <button onClick={handleLookup} disabled={loading}>
-          {loading ? "查询中..." : "查询"}
-        </button>
+      <div className="combobox-wrapper" ref={dropdownRef}>
+        <div className="input-row">
+          <div className="input-with-toggle">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLookup()}
+              placeholder="输入单词，多个词用逗号分隔..."
+              disabled={loading}
+            />
+            <button
+              className={`dropdown-toggle ${showBankPanel ? "active" : ""}`}
+              onClick={() => setShowBankPanel(!showBankPanel)}
+              title="从词库导入"
+            >
+              ▼
+            </button>
+          </div>
+        </div>
+        {isBatchMode && !loading && !batchResults && (
+          <p className="batch-hint">检测到 {inputWords.length} 个单词，点击查询批量导入</p>
+        )}
+        {showBankPanel && (
+          <div className="dropdown-panel">
+            <WordBankPanel
+              onImport={handleBankImport}
+              existingWords={words}
+              onClose={() => setShowBankPanel(false)}
+            />
+          </div>
+        )}
       </div>
 
       {msg && <p className="msg">{msg}</p>}
+
+      {batchResults && (
+        <div className="batch-preview">
+          <div className="batch-preview-header">
+            <h3>查询结果 ({batchResults.length} 词)</h3>
+            <button className="btn-primary" onClick={handleBatchImport}>
+              确认导入
+            </button>
+            <button className="btn-cancel" onClick={() => { setBatchResults(null); setInput(""); }}>
+              取消
+            </button>
+          </div>
+          <div className="batch-word-list">
+            {batchResults.map((w) => {
+              const exists = words.some((ew) => ew.word?.toLowerCase() === w.word.toLowerCase());
+              return (
+                <div key={w.word} className={`wb-word-item ${exists ? "wb-exists" : ""}`}>
+                  <span className="wb-word">{w.word}</span>
+                  <span className="wb-phonetic">{w.usPhonetic || w.ukPhonetic}</span>
+                  <span className="wb-meaning">{w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}</span>
+                  {exists && <span className="wb-tag-exists">已添加</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {preview && (
         <div className="preview-card">
@@ -147,23 +266,15 @@ export default function ParentPage() {
                 )}
               </div>
             </div>
-            {preview.imageUrl && (
-              <img src={preview.imageUrl} alt={preview.word} className="preview-img" />
-            )}
           </div>
 
           <div className="meanings-edit">
             {preview.meanings.map((m, i) => (
               <div key={i} className="meaning-block">
                 <span className="pos-tag">{m.pos}</span>
-                <p
-                  className="meaning-text"
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => updateMeaning(i, "meaning_cn", e.currentTarget.textContent)}
-                >
-                  {m.meaning_cn}
-                </p>
+                <div className="meaning-lines">
+                  <MeaningLines text={m.meaning_cn} />
+                </div>
                 {m.example && <p className="example">{m.example}</p>}
                 {m.example_cn && <p className="example">{m.example_cn}</p>}
               </div>
@@ -261,7 +372,6 @@ export default function ParentPage() {
                           </span>
                         </div>
                       )}
-                      {w.image_url && <img src={w.image_url} alt={w.word} className="word-item-img" />}
                       <div className="phonetic-row">
                         {w.uk_phonetic && (
                           <span className="phonetic-item">
@@ -281,7 +391,7 @@ export default function ParentPage() {
                       {w.meanings?.map((m, i) => (
                         <div key={i} className="word-item-meaning">
                           {m.pos && <span className="pos-tag">{m.pos}</span>}
-                          <p style={{ whiteSpace: "pre-line" }}>{m.meaning_cn}</p>
+                          <div className="meaning-lines"><MeaningLines text={m.meaning_cn} /></div>
                           {m.example && (
                             <div className="example-block">
                               <p className="example-en">{m.example}</p>

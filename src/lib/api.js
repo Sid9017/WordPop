@@ -1,8 +1,6 @@
 import { supabase } from "./supabase";
 import { getFamilyId } from "./family";
 
-const PIXABAY_KEY = import.meta.env.VITE_PIXABAY_API_KEY || "";
-
 const POS_MAP = {
   n: "noun", v: "verb", adj: "adjective", adv: "adverb",
   prep: "preposition", conj: "conjunction", pron: "pronoun",
@@ -58,22 +56,71 @@ export async function lookupWord(word) {
     };
   });
 
-  let imageUrl = "";
-  try {
-    let imgRes = await fetch(
-      `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(query)}&image_type=photo&per_page=5&safesearch=true&editors_choice=true`
-    );
-    let imgData = imgRes.ok ? await imgRes.json() : { hits: [] };
-    if (!imgData.hits?.length) {
-      imgRes = await fetch(
-        `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(query)}&image_type=photo&per_page=5&safesearch=true`
-      );
-      imgData = imgRes.ok ? await imgRes.json() : { hits: [] };
-    }
-    imageUrl = imgData.hits?.[0]?.webformatURL || "";
-  } catch { /* ignore */ }
+  return { word: canonicalWord, ukPhonetic, usPhonetic, imageUrl: "", meanings };
+}
 
-  return { word: canonicalWord, ukPhonetic, usPhonetic, imageUrl, meanings };
+// ===== 批量查词（前端实现）=====
+
+let _bankCache = {};
+
+async function loadBankData(bankId) {
+  if (_bankCache[bankId]) return _bankCache[bankId];
+  try {
+    const res = await fetch(`/data/word-banks/${bankId}.json`);
+    const data = await res.json();
+    _bankCache[bankId] = data;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+const BANK_IDS = ["KET", "PET", "CET4", "CET6", "TOEFL", "IELTS", "SAT", "GRE", "GMAT", "BEC"];
+
+let _wordIndex = null;
+
+async function buildWordIndex() {
+  if (_wordIndex) return _wordIndex;
+  _wordIndex = {};
+  for (const id of BANK_IDS) {
+    const bank = await loadBankData(id);
+    if (!bank?.words) continue;
+    for (const w of bank.words) {
+      const key = w.word.toLowerCase();
+      if (!_wordIndex[key]) _wordIndex[key] = w;
+    }
+  }
+  return _wordIndex;
+}
+
+export async function batchLookupWords(wordList, onProgress) {
+  const index = await buildWordIndex();
+  const results = [];
+  const toQuery = [];
+
+  for (const raw of wordList) {
+    const w = raw.trim().toLowerCase();
+    if (!w) continue;
+    if (index[w]) {
+      results.push(index[w]);
+    } else {
+      toQuery.push(w);
+    }
+  }
+
+  if (onProgress) onProgress({ cached: results.length, remaining: toQuery.length });
+
+  for (let i = 0; i < toQuery.length; i++) {
+    try {
+      const data = await lookupWord(toQuery[i]);
+      results.push(data);
+    } catch {
+      // word not found, skip
+    }
+    if (onProgress) onProgress({ cached: results.length - toQuery.length + i + 1, remaining: toQuery.length - i - 1, current: toQuery[i] });
+  }
+
+  return results;
 }
 
 // ===== 家长：保存单词 =====

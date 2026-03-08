@@ -1,10 +1,54 @@
 # AGENTS.md
 
+## 开发流程（铁律）
+
+1. **先做规划**：收到需求后，先制定开发方案和计划，不得直接动手写代码。
+2. **讨论确认**：将规划方案与用户讨论，形成关键开发点供用户 review。
+3. **用户通过后实现**：只有用户明确通过关键开发点后，才可以开始编码实现。
+4. **用户验证**：实现完成后交由用户验证和修改，不得自行判定完成。
+5. **用户说通过才通过**：只有用户明确说"通过"时，该任务才算完成。
+
 ## 部署规则（铁律）
 
 - **禁止自动部署**：修改完代码后，不得自动执行 `git push` 或任何部署操作。
 - **本地 review 优先**：所有改动完成后，先告知用户，等待用户本地检查确认。
 - **用户指令部署**：只有在用户明确说"部署"时，才可以执行 `git push` 进行部署。
+
+## 词库功能规划（第一期）
+
+### 确定做的词库（11 个）
+
+**有道 API 直接可用（8 个）：**
+
+| 词库 | 有道 ID | 词数 |
+|------|---------|------|
+| CET-4 | CET4luan_2 | 3,739 |
+| CET-6 | CET6_2 | 2,078 |
+| TOEFL | TOEFL_2 | 9,213 |
+| IELTS | IELTSluan_2 | 3,427 |
+| GRE | GRE_2 | 7,199 |
+| SAT | SAT_2 | 4,423 |
+| GMAT | GMATluan_2 | 3,254 |
+| BEC | BEC_2 | 2,753 |
+
+**剑桥官网 PDF 解析（2 个）：**
+
+| 词库 | 词数 |
+|------|------|
+| KET | ~1,500 |
+| PET | ~3,300 |
+
+**用户自定义（1 个）：** 现有逐词添加功能即为自定义词库。
+
+### 每日新词学习（待定入口）
+
+- **需求**：做题前先学习当日 5 个新词（即 `getQuizWords` 返回的前 5 个 `_isNew` 词），逐个展示完整词卡（单词、音标、发音、全部释义+词性、例句+中文翻译），用户浏览后点下一个。
+- **定位**：非必选项，不影响每日打卡判定，纯学习辅助。
+- **待确定**：入口方式（需对 iPad 触屏友好）。
+
+### 暂不做的词库
+
+FCE、CAE、CPE、ACT、PTE — 无现成公开机器可读词库，后续有数据源再扩展。
 
 ## 变更记录规则
 
@@ -24,3 +68,9 @@
 - 2026-03-01 - 移除题目中所有小喇叭图标：en2cn 点击单词发音、cn2en 点击选项发音、spell/newSpell 点击音标发音（新增 `.phonetic-clickable` 样式），答题结果中点击单词发音。移除 `SpeakerIcon` 导入。涉及文件：`src/pages/QuizPage.jsx`、`src/index.css`。
 - 2026-03-04 - 拼写题（spell/newSpell）改为单输入框 + 防输入法候选词提示：使用 `autoComplete="one-time-code"` / `autoCorrect="off"` / `autoCapitalize="off"` / `spellCheck={false}` / `data-form-type="other"` 组合属性彻底禁止系统输入提示。正确时输入框变绿，错误时输入框变红+震动并显示正确答案。移除了之前的 LetterBoxes 逐字母组件。涉及文件：`src/pages/QuizPage.jsx`、`src/index.css`。
 - 2026-03-04 - 连连看改为全部连完后统一判定：配对时仅标灰（`.linked`），不即时判对错；全部配完后延迟 350ms 统一判定，正确的变绿（`.correct`），错误的变红+震动（`.wrong`），再延迟 1.2s 后进入下一题。涉及文件：`src/pages/QuizPage.jsx`（MatchGame 重写）、`src/index.css`（新增 `.linked`/`.correct` 状态样式）。
+- 2026-03-08 - 新增「开发流程（铁律）」章节：规划→讨论→用户通过→实现→用户验证→用户说通过才通过，五步流程。涉及文件：`AGENTS.md`。
+- 2026-03-08 - 新增「词库功能规划（第一期）」章节：确定 11 个词库（有道 API 8 个 + 剑桥 PDF 2 个 + 用户自定义 1 个），暂不做 FCE/CAE/CPE/ACT/PTE。涉及文件：`AGENTS.md`。
+- 2026-03-08 - 完成 10 个预置词库数据准备：有道背单词 API 下载 8 个词库 zip 包（CET-4/CET-6/TOEFL/IELTS/GRE/SAT/GMAT/BEC）解析 JSONL 生成结构化 JSON；剑桥官网下载 KET/PET PDF 词表，已有词库数据交叉复用 + 有道 API 并发补全。共 40,535 词，存储于 `data/word-banks/` 目录（10 个 JSON 文件）。
+- 2026-03-08 - 实现词库导入与批量添加功能（Combobox 统一输入方案）。新增文件：`src/components/WordBankPanel.jsx`（词库选择面板，按分类展示 10 个预置词库，支持搜索/预览/一键导入）、`src/components/ImportProgress.jsx`（异步导入进度条组件 + `useImportTask` hook，后台逐批保存不阻塞 UI）、`netlify/functions/batch-lookup.js`（后端批量查词函数，生产环境可用）。修改文件：`src/lib/api.js`（新增 `batchLookupWords` 前端批量查词：优先从 10 个词库 JSON 缓存命中，未命中词走有道 API 逐个查询）、`src/pages/ParentPage.jsx`（输入框升级为 Combobox：自动检测单词/批量/词库模式，单词回车查询、多词换行或逗号分隔批量查询、▼ 按钮打开词库面板）、`src/index.css`（Combobox/词库面板/批量预览/进度条全套样式）、`netlify.toml`（添加 `included_files` 配置）、`vite.config.js`（清理）。词库 JSON 从 `data/word-banks/` 迁移到 `public/data/word-banks/` 供前端直接访问。
+- 2026-03-08 - 导入任务全局化：将 `ImportProgress` 从组件级状态改为模块级单例（`useSyncExternalStore` + 模块变量），导入任务在页面切换后仍持续运行；进度条从 `ParentPage` 移至 `App.jsx` 顶层渲染（`position: sticky`），任何页面均可见。涉及文件：`src/components/ImportProgress.jsx`（重写为全局单例：`startGlobalImport`/`cancelGlobalImport`/`clearGlobalImport`/`useGlobalImportTask`）、`src/App.jsx`（顶层渲染 `ImportProgress`）、`src/pages/ParentPage.jsx`（改用全局 API，移除本地进度条）、`src/index.css`（进度条 `sticky` 定位 + 阴影）。
+- 2026-03-08 - 新增每日新词学习页面 + 学生页日历泡泡入口。新增文件：`src/pages/LearnPage.jsx`（逐个展示当日 5 个新词完整词卡：单词点击发音、UK/US 音标、全部释义+词性、例句+中文翻译；底部按钮前 4 词为「下一个 →」、最后 1 词为「开始测测 ✏️」跳转做题页；支持 `extra` 参数获取新一批词）。修改文件：`src/App.jsx`（添加 `/child/learn` 路由）、`src/pages/ChildPage.jsx`（今日格子点击变形为「学学」「测测」两个按钮，已完成今日任务时传 `extra=1` 获取新词）、`src/index.css`（LearnPage 全套样式：进度条、词卡、音标、释义卡片、例句、固定底部按钮；日历泡泡按钮样式）。
