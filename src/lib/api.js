@@ -168,12 +168,22 @@ export async function saveWord({ word, ukPhonetic, usPhonetic, phonetic, imageUr
 
 export async function getAllWords() {
   const familyId = getFamilyId();
-  const { data } = await supabase
-    .from("words")
-    .select("*, meanings(*), progress(*)")
-    .eq("family_id", familyId)
-    .order("created_at", { ascending: false });
-  return data || [];
+  const all = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const { data } = await supabase
+      .from("words")
+      .select("*, meanings(*), progress(*)")
+      .eq("family_id", familyId)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (!data?.length) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
 }
 
 export async function deleteWord(id) {
@@ -203,17 +213,35 @@ export async function getQuizWords({ extra = false } = {}) {
     if (todayDone) return [];
   }
 
-  const { data: allWords } = await supabase
-    .from("words")
-    .select("*, meanings(*)")
-    .eq("family_id", familyId);
-  if (!allWords?.length) return [];
+  const allWords = [];
+  let wFrom = 0;
+  while (true) {
+    const { data } = await supabase
+      .from("words")
+      .select("*, meanings(*)")
+      .eq("family_id", familyId)
+      .range(wFrom, wFrom + 999);
+    if (!data?.length) break;
+    allWords.push(...data);
+    if (data.length < 1000) break;
+    wFrom += 1000;
+  }
+  if (!allWords.length) return [];
 
-  const { data: quizHistory } = await supabase
-    .from("quiz_log")
-    .select("word_id, created_at, is_correct")
-    .eq("family_id", familyId)
-    .order("created_at", { ascending: false });
+  const quizHistory = [];
+  let qFrom = 0;
+  while (true) {
+    const { data } = await supabase
+      .from("quiz_log")
+      .select("word_id, created_at, is_correct")
+      .eq("family_id", familyId)
+      .order("created_at", { ascending: false })
+      .range(qFrom, qFrom + 999);
+    if (!data?.length) break;
+    quizHistory.push(...data);
+    if (data.length < 1000) break;
+    qFrom += 1000;
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
