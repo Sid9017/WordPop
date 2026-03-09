@@ -304,7 +304,7 @@ export default function QuizPage() {
     } else if (q.type === "en2cn") {
       correct = answer === q.display_cn;
     } else if (q.type === "spell" || q.type === "newSpell") {
-      const normalize = (s) => s.replace(/[\s\u00A0\u3000]+/g, " ").trim().toLowerCase();
+      const normalize = (s) => s.replace(/[\s\u00A0\u3000\-]+/g, " ").trim().toLowerCase();
       const na = normalize(answer);
       correct = getWordForms(q.word.word).some(f => {
         const nf = normalize(f);
