@@ -62,7 +62,7 @@ function buildQuestions(words) {
   const newQuestions = newValid.map((w) => {
     const m = filterMeanings(w)[0];
     const display_cn = primaryMeaning(m.meaning_cn);
-    return { word: w, meaning: m, display_cn, type: "newSpell", wordId: w.id, meaningId: m.id };
+    return { word: w, meaning: m, display_cn, type: "newSpell", wordObj: w, meaningId: m.id };
   });
 
   const tiers = [20, 15, 10, 5];
@@ -79,12 +79,12 @@ function buildQuestions(words) {
     if (surplus >= 3 && pool.length >= 4 && Math.random() < 0.25) {
       const mw = pool.splice(0, 4);
       const pairs = mw.map((w) => ({
-        wordId: w.id, meaningId: filterMeanings(w)[0].id,
+        wordObj: w, meaningId: filterMeanings(w)[0].id,
         en: w.word, cn: primaryMeaning(filterMeanings(w)[0].meaning_cn),
       }));
       reviewQuestions.push({
         type: "match", pairs,
-        wordIds: mw.map((w) => w.id),
+        wordObjs: mw,
         meaningIds: mw.map((w) => filterMeanings(w)[0].id),
       });
     } else {
@@ -92,7 +92,7 @@ function buildQuestions(words) {
       const m = filterMeanings(w)[0];
       const display_cn = primaryMeaning(m.meaning_cn);
       const type = ["cn2en", "en2cn", "spell"][Math.floor(Math.random() * 3)];
-      const q = { word: w, meaning: m, display_cn, type, wordId: w.id, meaningId: m.id };
+      const q = { word: w, meaning: m, display_cn, type, wordObj: w, meaningId: m.id };
       if (type === "cn2en") q.options = makeOptions(w.word, words, "word");
       if (type === "en2cn") q.options = makeOptions(display_cn, words, "meaning_cn");
       reviewQuestions.push(q);
@@ -103,8 +103,8 @@ function buildQuestions(words) {
 }
 
 function MatchGame({ pairs, onComplete }) {
-  const [leftItems] = useState(() => shuffle(pairs.map((p) => ({ id: p.wordId, text: p.cn, key: p.en }))));
-  const [rightItems] = useState(() => shuffle(pairs.map((p) => ({ id: p.wordId, text: p.en, key: p.en }))));
+  const [leftItems] = useState(() => shuffle(pairs.map((p) => ({ id: p.wordObj.id, text: p.cn, key: p.en }))));
+  const [rightItems] = useState(() => shuffle(pairs.map((p) => ({ id: p.wordObj.id, text: p.en, key: p.en }))));
   const [selLeft, setSelLeft] = useState(null);
   const [links, setLinks] = useState([]);
   const [judged, setJudged] = useState(false);
@@ -298,7 +298,7 @@ export default function QuizPage() {
     setSelected(answer);
     setScore((s) => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }));
     if (!correct) setWrongOnes((prev) => [...prev, q]);
-    await recordQuiz(q.wordId, q.meaningId, q.type === "newSpell" ? "spell" : q.type, correct);
+    await recordQuiz(q.wordObj, q.meaningId, q.type === "newSpell" ? "spell" : q.type, correct);
   }, [answered, currentQ]);
 
   function handleMatchComplete(allCorrect) {
@@ -307,8 +307,8 @@ export default function QuizPage() {
     setIsCorrect(allCorrect);
     setScore((s) => ({ correct: s.correct + (allCorrect ? 1 : 0), total: s.total + 1 }));
     if (!allCorrect) setWrongOnes((prev) => [...prev, q]);
-    for (let i = 0; i < q.wordIds.length; i++) {
-      recordQuiz(q.wordIds[i], q.meaningIds[i], "match", allCorrect);
+    for (let i = 0; i < q.wordObjs.length; i++) {
+      recordQuiz(q.wordObjs[i], q.meaningIds[i], "match", allCorrect);
     }
   }
 
@@ -338,8 +338,7 @@ export default function QuizPage() {
     } else {
       setPhase("done");
       setShowConfetti(true);
-      const wordIds = allWords.map((w) => w.id);
-      await updateMasteryStatus(wordIds);
+      await updateMasteryStatus(allWords);
       setTimeout(() => setShowConfetti(false), 4000);
     }
   }

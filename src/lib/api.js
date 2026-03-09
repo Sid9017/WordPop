@@ -194,6 +194,68 @@ export async function getAllWords() {
   return all;
 }
 
+export async function getAllSelectedWords(selectedBanks) {
+  const familyId = getFamilyId();
+  const all = [];
+  const seen = new Set();
+
+  if (selectedBanks.includes("custom")) {
+    const customWords = await getAllWords();
+    for (const w of customWords) {
+      seen.add(w.word.toLowerCase());
+      all.push({ ...w, _source: "custom" });
+    }
+  }
+
+  const bankIds = selectedBanks.filter((b) => b !== "custom");
+  if (!bankIds.length) return all;
+
+  // 批量加载所有选中词库的 bank_words
+  const bankWords = [];
+  for (const bankId of bankIds) {
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("bank_words")
+        .select("*")
+        .eq("bank_id", bankId)
+        .range(from, from + 999);
+      if (!data?.length) break;
+      bankWords.push(...data);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+  }
+
+  // 批量加载该家庭所有 bank_word 的 progress
+  const progressMap = {};
+  let pFrom = 0;
+  while (true) {
+    const { data } = await supabase
+      .from("progress")
+      .select("*")
+      .eq("family_id", familyId)
+      .not("bank_word_id", "is", null)
+      .range(pFrom, pFrom + 999);
+    if (!data?.length) break;
+    for (const p of data) progressMap[p.bank_word_id] = p;
+    if (data.length < 1000) break;
+    pFrom += 1000;
+  }
+
+  for (const bw of bankWords) {
+    const key = bw.word.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const norm = normalizeBankWord(bw);
+    norm.progress = progressMap[bw.id] ? [progressMap[bw.id]] : [];
+    norm._source = bw.bank_id;
+    all.push(norm);
+  }
+
+  return all;
+}
+
 export async function deleteWord(id) {
   await supabase.from("words").delete().eq("id", id);
 }
@@ -235,6 +297,26 @@ function seededShuffle(arr, seed) {
 // 第1次→1天后复习，第2次→2天，第3次→4天，第4次→1周，第5次→2周，第6次→1月
 const REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30];
 
+// 将 bank_word 行规范化为与 words 表兼容的格式
+function normalizeBankWord(bw) {
+  return {
+    id: bw.id,
+    _isBankWord: true,
+    word: bw.word,
+    phonetic: bw.us_phonetic || "",
+    uk_phonetic: bw.uk_phonetic || "",
+    image_url: "",
+    meanings: (bw.meanings || []).map((m, i) => ({
+      id: `${bw.id}_m${i}`,
+      pos: m.pos || "",
+      meaning_cn: m.meaning_cn || "",
+      meaning_en: m.meaning_en || "",
+      example: m.example || "",
+      example_cn: m.example_cn || "",
+    })),
+  };
+}
+
 export async function getQuizWords({ extra = false } = {}) {
   const familyId = getFamilyId();
 
@@ -243,27 +325,59 @@ export async function getQuizWords({ extra = false } = {}) {
     if (todayDone) return [];
   }
 
+  const { data: familyRow } = await supabase
+    .from("families")
+    .select("daily_new_words, selected_banks")
+    .eq("id", familyId)
+    .maybeSingle();
+  const dailyNewWords = familyRow?.daily_new_words ?? 5;
+  const selectedBanks = familyRow?.selected_banks ?? ["custom"];
+
+  // 合并词池
   const allWords = [];
-  let wFrom = 0;
-  while (true) {
-    const { data } = await supabase
-      .from("words")
-      .select("*, meanings(*)")
-      .eq("family_id", familyId)
-      .range(wFrom, wFrom + 999);
-    if (!data?.length) break;
-    allWords.push(...data);
-    if (data.length < 1000) break;
-    wFrom += 1000;
+
+  // 加载自定义词
+  if (selectedBanks.includes("custom")) {
+    let wFrom = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("words")
+        .select("*, meanings(*)")
+        .eq("family_id", familyId)
+        .range(wFrom, wFrom + 999);
+      if (!data?.length) break;
+      allWords.push(...data);
+      if (data.length < 1000) break;
+      wFrom += 1000;
+    }
   }
+
+  // 加载选中的预置词库
+  const bankIds = selectedBanks.filter((b) => b !== "custom");
+  for (const bankId of bankIds) {
+    let bFrom = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("bank_words")
+        .select("*")
+        .eq("bank_id", bankId)
+        .range(bFrom, bFrom + 999);
+      if (!data?.length) break;
+      allWords.push(...data.map(normalizeBankWord));
+      if (data.length < 1000) break;
+      bFrom += 1000;
+    }
+  }
+
   if (!allWords.length) return [];
 
+  // 加载做题历史（word_id + bank_word_id 两列）
   const quizHistory = [];
   let qFrom = 0;
   while (true) {
     const { data } = await supabase
       .from("quiz_log")
-      .select("word_id, created_at, is_correct")
+      .select("word_id, bank_word_id, created_at, is_correct")
       .eq("family_id", familyId)
       .order("created_at", { ascending: false })
       .range(qFrom, qFrom + 999);
@@ -276,21 +390,23 @@ export async function getQuizWords({ extra = false } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
 
-  // 统计每个词的做题数据
+  const getRefId = (q) => q.bank_word_id || q.word_id;
+
   const wordStats = {};
-  for (const q of (quizHistory || [])) {
+  for (const q of quizHistory) {
+    const refId = getRefId(q);
     const date = q.created_at.slice(0, 10);
-    if (!wordStats[q.word_id]) {
-      wordStats[q.word_id] = { lastQuiz: new Date(q.created_at), dates: new Set(), wrong: 0, total: 0 };
+    if (!wordStats[refId]) {
+      wordStats[refId] = { lastQuiz: new Date(q.created_at), dates: new Set(), wrong: 0, total: 0 };
     }
-    wordStats[q.word_id].dates.add(date);
-    wordStats[q.word_id].total++;
-    if (!q.is_correct) wordStats[q.word_id].wrong++;
+    wordStats[refId].dates.add(date);
+    wordStats[refId].total++;
+    if (!q.is_correct) wordStats[refId].wrong++;
   }
 
-  const quizzedWordIds = new Set((quizHistory || []).map((q) => q.word_id));
+  const quizzedWordIds = new Set(quizHistory.map(getRefId));
   const todayQuizzedIds = new Set(
-    (quizHistory || []).filter((q) => q.created_at.slice(0, 10) === today).map((q) => q.word_id)
+    quizHistory.filter((q) => q.created_at.slice(0, 10) === today).map(getRefId)
   );
 
   const sorted = [...allWords].sort((a, b) => a.id.localeCompare(b.id));
@@ -299,13 +415,12 @@ export async function getQuizWords({ extra = false } = {}) {
 
   const newWords = [];
   for (const w of shuffled) {
-    if (newWords.length >= 5) break;
+    if (newWords.length >= dailyNewWords) break;
     if (quizzedWordIds.has(w.id)) continue;
     if (extra && todayQuizzedIds.has(w.id)) continue;
     newWords.push({ ...w, _isNew: true });
   }
 
-  // 复习池：所有测试过的词（不排除今天的，让遗忘曲线+错误率决定优先级）
   const reviewPool = allWords.filter((w) => quizzedWordIds.has(w.id));
   if (reviewPool.length === 0) return newWords;
 
@@ -317,7 +432,6 @@ export async function getQuizWords({ extra = false } = {}) {
     const idealInterval = REVIEW_INTERVALS[Math.min(quizDays - 1, REVIEW_INTERVALS.length - 1)];
     const timePriority = daysSince / idealInterval;
     const errorRate = stats.wrong / Math.max(stats.total, 1);
-    // 错误率越高优先级越高，全错时权重×3
     const errorWeight = 1 + errorRate * 2;
     return { word: w, priority: timePriority * errorWeight };
   });
@@ -328,46 +442,72 @@ export async function getQuizWords({ extra = false } = {}) {
   return [...newWords, ...reviewWords];
 }
 
-export async function updateMasteryStatus(wordIds) {
-  for (const wid of wordIds) {
+export async function updateMasteryStatus(words) {
+  for (const w of words) {
+    const isBankWord = w._isBankWord;
+    const col = isBankWord ? "bank_word_id" : "word_id";
     const { data: prog } = await supabase
       .from("progress")
       .select("correct_count")
-      .eq("word_id", wid)
-      .single();
+      .eq(col, w.id)
+      .maybeSingle();
     if (prog && prog.correct_count >= 5) {
-      await supabase.from("progress").update({ stage: "mastered" }).eq("word_id", wid);
+      await supabase.from("progress").update({ stage: "mastered" }).eq(col, w.id);
     }
   }
 }
 
 // ===== 测试记录 =====
 
-export async function recordQuiz(wordId, meaningId, quizType, isCorrect) {
+export async function recordQuiz(word, meaningId, quizType, isCorrect) {
   const familyId = getFamilyId();
-  await supabase.from("quiz_log").insert({
-    word_id: wordId,
-    meaning_id: meaningId,
+  const isBankWord = word._isBankWord;
+
+  const logRow = {
     quiz_type: quizType,
     is_correct: isCorrect,
     family_id: familyId,
-  });
+  };
+  if (isBankWord) {
+    logRow.bank_word_id = word.id;
+    logRow.meaning_id = null;
+  } else {
+    logRow.word_id = word.id;
+    logRow.meaning_id = meaningId;
+  }
+  await supabase.from("quiz_log").insert(logRow);
 
+  // 更新 progress
+  const col = isBankWord ? "bank_word_id" : "word_id";
   const { data: prog } = await supabase
     .from("progress")
     .select("*")
-    .eq("word_id", wordId)
-    .single();
-  if (!prog) return;
+    .eq(col, word.id)
+    .eq("family_id", familyId)
+    .maybeSingle();
 
-  await supabase
-    .from("progress")
-    .update({
-      correct_count: prog.correct_count + (isCorrect ? 1 : 0),
-      wrong_count: prog.wrong_count + (isCorrect ? 0 : 1),
+  if (prog) {
+    await supabase
+      .from("progress")
+      .update({
+        correct_count: prog.correct_count + (isCorrect ? 1 : 0),
+        wrong_count: prog.wrong_count + (isCorrect ? 0 : 1),
+        last_quiz_at: new Date().toISOString(),
+      })
+      .eq("id", prog.id);
+  } else {
+    const newProg = {
+      stage: "testing",
+      correct_count: isCorrect ? 1 : 0,
+      wrong_count: isCorrect ? 0 : 1,
       last_quiz_at: new Date().toISOString(),
-    })
-    .eq("word_id", wordId);
+      next_review_at: new Date().toISOString(),
+      family_id: familyId,
+    };
+    if (isBankWord) newProg.bank_word_id = word.id;
+    else newProg.word_id = word.id;
+    await supabase.from("progress").insert(newProg);
+  }
 }
 
 // ===== 打卡 =====

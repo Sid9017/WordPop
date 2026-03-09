@@ -754,6 +754,91 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 .btn-exit:hover { color: var(--danger); transform: none; }
 
+/* ===== Settings Section ===== */
+.settings-section {
+  background: var(--card); border-radius: var(--radius);
+  padding: 14px 20px; border: 1px solid var(--border);
+  margin-bottom: 16px; animation: fadeIn 0.5s ease;
+}
+.settings-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.settings-label {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  white-space: nowrap;
+}
+.slider-value {
+  font-size: 20px; font-weight: 700; color: var(--accent);
+  min-width: 28px; text-align: center;
+}
+.settings-slider {
+  flex: 1; -webkit-appearance: none; appearance: none;
+  height: 28px; border-radius: 8px; outline: none;
+  border: 1px solid #f3d0df;
+  background: linear-gradient(to right, #f9a8d4, var(--accent)) #fdf2f8;
+  background-size: var(--slider-pct, 0%) 100%, 100% 100%;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+.settings-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 0; height: 0;
+  background: transparent;
+  border: none;
+}
+.settings-slider::-moz-range-thumb {
+  width: 0; height: 0;
+  background: transparent;
+  border: none;
+}
+.settings-slider::-moz-range-track {
+  height: 28px; border-radius: 8px;
+  background: transparent;
+}
+.slider-wrap {
+  flex: 1; position: relative; display: flex; align-items: center;
+}
+.slider-wrap .settings-slider { width: 100%; display: block; margin: 0; padding: 0; }
+.slider-hint {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--primary); text-shadow: 0 0 4px rgba(255,255,255,0.8);
+  pointer-events: none;
+  animation: hintPop 1.2s ease forwards;
+}
+@keyframes hintPop {
+  0% { opacity: 0; transform: scale(0.8); }
+  15% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+/* ===== Bank Selector ===== */
+.bank-selector {
+  background: var(--card); border-radius: var(--radius);
+  padding: 14px 20px; border: 1px solid var(--border);
+  margin-bottom: 16px; animation: fadeIn 0.5s ease;
+}
+.bank-selector-label {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  display: block; margin-bottom: 10px;
+}
+.word-source-tag {
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 4px; background: var(--primary-bg); color: var(--primary);
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.wb-bank-card.wb-selected {
+  border-color: var(--primary); background: var(--primary);
+}
+.wb-bank-card.wb-selected .wb-bank-name { color: #fff; }
+.wb-bank-card.wb-selected .wb-bank-desc { color: rgba(255,255,255,0.8); }
+.wb-bank-card.wb-selected:hover {
+  background: var(--primary-light); border-color: var(--primary-light);
+}
+
 /* ===== Invite Section ===== */
 .invite-section {
   margin-top: 32px; background: var(--card); border-radius: var(--radius);

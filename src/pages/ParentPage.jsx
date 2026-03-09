@@ -1,9 +1,23 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { lookupWord, saveWord, getAllWords, deleteWord, playAudio, batchLookupWords } from "../lib/api";
-import { getInviteToken } from "../lib/family";
+import { lookupWord, saveWord, getAllWords, getAllSelectedWords, deleteWord, playAudio, batchLookupWords } from "../lib/api";
+import { getInviteToken, getDailyNewWords, updateDailyNewWords, getSelectedBanks, updateSelectedBanks } from "../lib/family";
 import { SpeakerIcon } from "../components/Icons";
-import WordBankPanel from "../components/WordBankPanel";
 import { startGlobalImport, useGlobalImportTask } from "../components/ImportProgress";
+
+const BANKS = [
+  { id: "custom", name: "我的词库", desc: "手动添加", category: "我的" },
+  { id: "KET", name: "KET", desc: "Cambridge A2 Key", category: "剑桥体系" },
+  { id: "PET", name: "PET", desc: "Cambridge B1 Preliminary", category: "剑桥体系" },
+  { id: "CET4", name: "CET-4", desc: "大学英语四级", category: "大学英语" },
+  { id: "CET6", name: "CET-6", desc: "大学英语六级", category: "大学英语" },
+  { id: "TOEFL", name: "TOEFL", desc: "托福", category: "留学考试" },
+  { id: "IELTS", name: "IELTS", desc: "雅思", category: "留学考试" },
+  { id: "SAT", name: "SAT", desc: "SAT", category: "留学考试" },
+  { id: "GRE", name: "GRE", desc: "GRE", category: "留学考试" },
+  { id: "GMAT", name: "GMAT", desc: "GMAT", category: "商务职场" },
+  { id: "BEC", name: "BEC", desc: "商务英语", category: "商务职场" },
+];
+const CATEGORIES = ["我的", "剑桥体系", "大学英语", "留学考试", "商务职场"];
 
 const STAGE_FILTERS = [
   { value: "all", label: "全部" },
@@ -40,31 +54,41 @@ export default function ParentPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [expandedWords, setExpandedWords] = useState({});
   const [showCount, setShowCount] = useState(10);
-  const [showBankPanel, setShowBankPanel] = useState(false);
-  const dropdownRef = useRef(null);
+  const [dailyNew, setDailyNew] = useState(5);
+  const [dailyNewSaving, setDailyNewSaving] = useState(false);
+  const [sliderHint, setSliderHint] = useState("");
+  const [sliderHintKey, setSliderHintKey] = useState(0);
+  const [selectedBanks, setSelectedBanks] = useState(["custom"]);
+  const [wordsLoading, setWordsLoading] = useState(false);
+  const hintTimer = useRef(null);
 
   const importTask = useGlobalImportTask();
 
-  const loadWords = useCallback(async () => {
-    const data = await getAllWords();
+  const banksRef = useRef(selectedBanks);
+  banksRef.current = selectedBanks;
+
+  const loadWords = useCallback(async (banks) => {
+    const b = banks || banksRef.current;
+    setWordsLoading(true);
+    const data = await getAllSelectedWords(b);
     setWords(data);
+    setWordsLoading(false);
   }, []);
 
-  useEffect(() => { loadWords(); }, [loadWords]);
+  useEffect(() => {
+    (async () => {
+      const [, banks] = await Promise.all([
+        getDailyNewWords().then(setDailyNew),
+        getSelectedBanks(),
+      ]);
+      setSelectedBanks(banks);
+      loadWords(banks);
+    })();
+  }, [loadWords]);
 
   useEffect(() => {
     if (importTask && !importTask.active) loadWords();
   }, [importTask?.active, loadWords]);
-
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowBankPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const inputWords = parseInputWords(input);
   const isBatchMode = inputWords.length > 1;
@@ -97,6 +121,16 @@ export default function ParentPage() {
     setLoading(false);
   }
 
+  async function toggleBank(bankId) {
+    const next = selectedBanks.includes(bankId)
+      ? selectedBanks.filter((b) => b !== bankId)
+      : [...selectedBanks, bankId];
+    if (next.length === 0) return;
+    setSelectedBanks(next);
+    await updateSelectedBanks(next);
+    loadWords(next);
+  }
+
   async function handleSave() {
     if (!preview) return;
     setLoading(true);
@@ -123,10 +157,6 @@ export default function ParentPage() {
     startGlobalImport(newWords);
     setBatchResults(null);
     setInput("");
-  }
-
-  function handleBankImport(bankWords) {
-    startGlobalImport(bankWords);
   }
 
   function updateMeaning(idx, field, value) {
@@ -182,36 +212,89 @@ export default function ParentPage() {
     <div className="page">
       <h1 className="page-title">家长管理</h1>
 
-      <div className="combobox-wrapper" ref={dropdownRef}>
-        <div className="input-row">
-          <div className="input-with-toggle">
+      <div className="settings-section">
+        <div className="settings-row">
+          <span className="settings-label">每日新词</span>
+          <span className="slider-value">{dailyNew}</span>
+          <div className="slider-wrap">
             <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-              placeholder="输入单词，多个词用逗号分隔..."
-              disabled={loading}
+              type="range"
+              className="settings-slider"
+              min={5}
+              max={30}
+              step={1}
+              value={dailyNew}
+              disabled={dailyNewSaving}
+              style={{ "--slider-pct": `${((dailyNew - 5) / 25) * 100}%` }}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setDailyNew(v);
+                const hints = [
+                  [5, "So Easy! 😎"],
+                  [8, "热热身~"],
+                  [11, "小试牛刀 💪"],
+                  [14, "稳步提升中"],
+                  [17, "有点厉害哦"],
+                  [20, "学霸在线 🔥"],
+                  [23, "卷起来了!"],
+                  [26, "硬核挑战 🏋️"],
+                  [29, "终极模式!"],
+                  [30, "词霸诞生! 👑"],
+                ];
+                const hint = [...hints].reverse().find((h) => v >= h[0]);
+                if (hint) {
+                  setSliderHint(hint[1]);
+                  setSliderHintKey((k) => k + 1);
+                  clearTimeout(hintTimer.current);
+                  hintTimer.current = setTimeout(() => setSliderHint(""), 1200);
+                }
+              }}
+              onPointerUp={async () => {
+                setDailyNewSaving(true);
+                await updateDailyNewWords(dailyNew);
+                setDailyNewSaving(false);
+              }}
             />
-            <button
-              className={`dropdown-toggle ${showBankPanel ? "active" : ""}`}
-              onClick={() => setShowBankPanel(!showBankPanel)}
-              title="从词库导入"
-            >
-              ▼
-            </button>
+            {sliderHint && <span className="slider-hint" key={sliderHintKey}>{sliderHint}</span>}
           </div>
+        </div>
+      </div>
+
+      <div className="bank-selector">
+        <span className="bank-selector-label">出题词库</span>
+        <div className="wb-categories">
+          {CATEGORIES.map((cat) => (
+            <div key={cat} className="wb-category">
+              <h4 className="wb-cat-title">{cat}</h4>
+              <div className="wb-bank-grid">
+                {BANKS.filter((b) => b.category === cat).map((bank) => (
+                  <button
+                    key={bank.id}
+                    className={`wb-bank-card ${selectedBanks.includes(bank.id) ? "wb-selected" : ""}`}
+                    onClick={() => toggleBank(bank.id)}
+                  >
+                    <span className="wb-bank-name">{bank.name}</span>
+                    <span className="wb-bank-desc">{bank.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="combobox-wrapper">
+        <div className="input-row">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleLookup()}
+            placeholder="添加到我的词库：输入单词，多个词用逗号分隔..."
+            disabled={loading}
+          />
         </div>
         {isBatchMode && !loading && !batchResults && (
           <p className="batch-hint">检测到 {inputWords.length} 个单词，点击查询批量导入</p>
-        )}
-        {showBankPanel && (
-          <div className="dropdown-panel">
-            <WordBankPanel
-              onImport={handleBankImport}
-              existingWords={words}
-              onClose={() => setShowBankPanel(false)}
-            />
-          </div>
         )}
       </div>
 
@@ -288,7 +371,7 @@ export default function ParentPage() {
       )}
 
       <div className="word-browser">
-        <h2>已添加的单词 ({words.length})</h2>
+        <h2>已添加的单词 ({wordsLoading ? "加载中..." : words.length})</h2>
 
         <div className="browser-toolbar">
           <input
@@ -346,6 +429,9 @@ export default function ParentPage() {
                     <span className="stage-badge" style={badgeStyle}>
                       {badgeText}
                     </span>
+                    {w._source && w._source !== "custom" && (
+                      <span className="word-source-tag">{w._source}</span>
+                    )}
                     <span className="word-item-brief">
                       {w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}
                     </span>
@@ -400,7 +486,9 @@ export default function ParentPage() {
                           )}
                         </div>
                       ))}
-                      <button className="btn-del" onClick={() => handleDelete(w.id)}>删除此词</button>
+                      {(!w._source || w._source === "custom") && (
+                        <button className="btn-del" onClick={() => handleDelete(w.id)}>删除此词</button>
+                      )}
                     </div>
                   )}
                 </div>

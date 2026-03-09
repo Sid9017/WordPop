@@ -9,6 +9,8 @@ CREATE TABLE families (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   pin text UNIQUE NOT NULL,
   invite_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text, '-', ''),
+  daily_new_words integer NOT NULL DEFAULT 5 CHECK (daily_new_words >= 5 AND daily_new_words <= 30),
+  invite_token_expires_at timestamptz,
   created_at timestamptz DEFAULT now()
 );
 

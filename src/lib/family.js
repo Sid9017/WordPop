@@ -33,10 +33,13 @@ export async function checkPinAvailable(pin) {
 export async function createFamilyFromInvite(token, pin) {
   const { data: inviter } = await supabase
     .from("families")
-    .select("id")
+    .select("id, invite_token_expires_at")
     .eq("invite_token", token)
     .maybeSingle();
   if (!inviter) return { error: "邀请链接无效" };
+  if (inviter.invite_token_expires_at && new Date(inviter.invite_token_expires_at) < new Date()) {
+    return { error: "邀请链接已过期，请让对方重新生成" };
+  }
 
   const available = await checkPinAvailable(pin);
   if (!available) return { error: "该口令已被使用，请换一个" };
@@ -52,13 +55,58 @@ export async function createFamilyFromInvite(token, pin) {
   return { familyId: newFamily.id };
 }
 
+export async function getDailyNewWords() {
+  const familyId = getFamilyId();
+  if (!familyId) return 5;
+  const { data } = await supabase
+    .from("families")
+    .select("daily_new_words")
+    .eq("id", familyId)
+    .maybeSingle();
+  return data?.daily_new_words ?? 5;
+}
+
+export async function updateDailyNewWords(count) {
+  const familyId = getFamilyId();
+  if (!familyId) return false;
+  const val = Math.max(5, Math.min(30, Math.round(count)));
+  const { error } = await supabase
+    .from("families")
+    .update({ daily_new_words: val })
+    .eq("id", familyId);
+  return !error;
+}
+
+export async function getSelectedBanks() {
+  const familyId = getFamilyId();
+  if (!familyId) return ["custom"];
+  const { data } = await supabase
+    .from("families")
+    .select("selected_banks")
+    .eq("id", familyId)
+    .maybeSingle();
+  return data?.selected_banks ?? ["custom"];
+}
+
+export async function updateSelectedBanks(banks) {
+  const familyId = getFamilyId();
+  if (!familyId) return false;
+  const { error } = await supabase
+    .from("families")
+    .update({ selected_banks: banks })
+    .eq("id", familyId);
+  return !error;
+}
+
 export async function getInviteToken() {
   const familyId = getFamilyId();
   if (!familyId) return null;
-  const { data } = await supabase
+  const newToken = crypto.randomUUID().replace(/-/g, "");
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const { error } = await supabase
     .from("families")
-    .select("invite_token")
-    .eq("id", familyId)
-    .maybeSingle();
-  return data?.invite_token || null;
+    .update({ invite_token: newToken, invite_token_expires_at: expiresAt })
+    .eq("id", familyId);
+  if (error) return null;
+  return newToken;
 }
