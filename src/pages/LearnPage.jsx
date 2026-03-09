@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getQuizWords, playAudio } from "../lib/api";
+import { getQuizWords, playAudio, setAudioPref } from "../lib/api";
 import { SpeakerIcon } from "../components/Icons";
+import { getPronunciationPref } from "../lib/family";
 
 export default function LearnPage() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function LearnPage() {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
     (async () => {
+      getPronunciationPref().then(p => setAudioPref(p));
       const all = await getQuizWords({ extra: true });
       const newWords = all.filter((w) => w._isNew);
       setWords(newWords);
@@ -30,7 +32,7 @@ export default function LearnPage() {
       const key = `${idx}-${words[idx].word}`;
       if (lastPlayedRef.current !== key) {
         lastPlayedRef.current = key;
-        playAudio(words[idx].word, 2);
+        playAudio(words[idx].word);
       }
     }
   }, [idx, words]);
@@ -52,7 +54,7 @@ export default function LearnPage() {
       <div className="learn-card">
         <h1
           className="learn-word"
-          onClick={() => playAudio(word.word, 2)}
+          onClick={() => playAudio(word.word)}
         >
           {word.word}
         </h1>

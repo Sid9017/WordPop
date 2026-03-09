@@ -98,6 +98,27 @@ export async function updateSelectedBanks(banks) {
   return !error;
 }
 
+export async function getPronunciationPref() {
+  const familyId = getFamilyId();
+  if (!familyId) return "us";
+  const { data } = await supabase
+    .from("families")
+    .select("pronunciation_pref")
+    .eq("id", familyId)
+    .maybeSingle();
+  return data?.pronunciation_pref ?? "us";
+}
+
+export async function updatePronunciationPref(pref) {
+  const familyId = getFamilyId();
+  if (!familyId) return false;
+  const { error } = await supabase
+    .from("families")
+    .update({ pronunciation_pref: pref })
+    .eq("id", familyId);
+  return !error;
+}
+
 export async function getInviteToken() {
   const familyId = getFamilyId();
   if (!familyId) return null;

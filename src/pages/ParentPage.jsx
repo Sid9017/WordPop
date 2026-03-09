@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { lookupWord, saveWord, getAllWords, getAllSelectedWords, deleteWord, playAudio, batchLookupWords } from "../lib/api";
-import { getInviteToken, getDailyNewWords, updateDailyNewWords, getSelectedBanks, updateSelectedBanks } from "../lib/family";
+import { lookupWord, saveWord, getAllWords, getAllSelectedWords, getSelectedWordCount, deleteWord, playAudio, batchLookupWords } from "../lib/api";
+import { getInviteToken, getDailyNewWords, updateDailyNewWords, getSelectedBanks, updateSelectedBanks, getPronunciationPref, updatePronunciationPref } from "../lib/family";
+import { setAudioPref } from "../lib/api";
 import { SpeakerIcon } from "../components/Icons";
 import { startGlobalImport, useGlobalImportTask } from "../components/ImportProgress";
 
@@ -60,6 +61,9 @@ export default function ParentPage() {
   const [sliderHintKey, setSliderHintKey] = useState(0);
   const [selectedBanks, setSelectedBanks] = useState(["custom"]);
   const [wordsLoading, setWordsLoading] = useState(false);
+  const [wordCount, setWordCount] = useState(null);
+  const [wordsFullyLoaded, setWordsFullyLoaded] = useState(false);
+  const [pronPref, setPronPref] = useState("us");
   const hintTimer = useRef(null);
   const sliderRef = useRef(null);
 
@@ -71,18 +75,32 @@ export default function ParentPage() {
   const loadWords = useCallback(async (banks) => {
     const b = banks || banksRef.current;
     setWordsLoading(true);
-    const data = await getAllSelectedWords(b);
-    setWords(data);
+    setWordsFullyLoaded(false);
+
+    const [count, firstPage] = await Promise.all([
+      getSelectedWordCount(b),
+      getAllSelectedWords(b, { limit: 50 }),
+    ]);
+    setWordCount(count);
+    setWords(firstPage);
     setWordsLoading(false);
+
+    const allData = await getAllSelectedWords(b);
+    setWords(allData);
+    setWordCount(allData.length);
+    setWordsFullyLoaded(true);
   }, []);
 
   useEffect(() => {
     (async () => {
-      const [, banks] = await Promise.all([
+      const [, banks, pref] = await Promise.all([
         getDailyNewWords().then(setDailyNew),
         getSelectedBanks(),
+        getPronunciationPref(),
       ]);
       setSelectedBanks(banks);
+      setPronPref(pref);
+      setAudioPref(pref);
       loadWords(banks);
     })();
   }, [loadWords]);
@@ -269,6 +287,18 @@ export default function ParentPage() {
             {sliderHint && <span className="slider-hint" key={sliderHintKey}>{sliderHint}</span>}
           </div>
         </div>
+        <div className="settings-row">
+          <span className="settings-label">默认发音</span>
+          <div className="pron-switch" onClick={async () => {
+            const next = pronPref === "us" ? "uk" : "us";
+            setPronPref(next);
+            setAudioPref(next);
+            await updatePronunciationPref(next);
+          }}>
+            <span className={`pron-option ${pronPref === "us" ? "pron-active" : ""}`}>🇺🇸 美音</span>
+            <span className={`pron-option ${pronPref === "uk" ? "pron-active" : ""}`}>🇬🇧 英音</span>
+          </div>
+        </div>
       </div>
 
       <div className="bank-selector">
@@ -382,7 +412,7 @@ export default function ParentPage() {
       )}
 
       <div className="word-browser">
-        <h2>已添加的单词 ({wordsLoading ? "加载中..." : words.length})</h2>
+        <h2>已添加的单词 ({wordCount != null ? wordCount : "加载中..."})</h2>
 
         <div className="browser-toolbar">
           <input
@@ -511,8 +541,11 @@ export default function ParentPage() {
               className="btn-show-more"
               onClick={() => setShowCount((c) => c + 10)}
             >
-              显示更多（还有 {filtered.length - showCount} 个）
+              显示更多（还有 {filtered.length - showCount} 个{!wordsFullyLoaded ? "+" : ""}）
             </button>
+          )}
+          {!wordsFullyLoaded && filtered.length <= showCount && words.length > 0 && (
+            <p className="loading-text" style={{ textAlign: "center", padding: 12, fontSize: 13, color: "#aaa" }}>加载剩余单词中...</p>
           )}
           </>
         )}

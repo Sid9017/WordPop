@@ -11,14 +11,25 @@ const POS_MAP = {
 
 let _lastAudioKey = "";
 let _lastAudioTime = 0;
+let _audioPref = 2; // 1=UK, 2=US
 
-export function playAudio(word, type = 2) {
-  const key = `${word}-${type}`;
+export function setAudioPref(pref) {
+  _audioPref = pref === "uk" ? 1 : 2;
+}
+
+export function getAudioPref() {
+  return _audioPref;
+}
+
+export function playAudio(word, type) {
+  const t = type ?? _audioPref;
+  const w = word.includes("/") ? word.split("/")[0] : word;
+  const key = `${w}-${t}`;
   const now = Date.now();
   if (key === _lastAudioKey && now - _lastAudioTime < 500) return;
   _lastAudioKey = key;
   _lastAudioTime = now;
-  const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${type}`;
+  const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(w)}&type=${t}`;
   const audio = new Audio(url);
   audio.play().catch(() => {});
 }
@@ -194,55 +205,118 @@ export async function getAllWords() {
   return all;
 }
 
-export async function getAllSelectedWords(selectedBanks) {
+export async function getSelectedWordCount(selectedBanks) {
+  const familyId = getFamilyId();
+  const promises = [];
+  if (selectedBanks.includes("custom")) {
+    promises.push(
+      supabase.from("words").select("*", { count: "exact", head: true })
+        .eq("family_id", familyId).then(({ count }) => count || 0)
+    );
+  }
+  for (const bankId of selectedBanks.filter((b) => b !== "custom")) {
+    promises.push(
+      supabase.from("bank_words").select("*", { count: "exact", head: true })
+        .eq("bank_id", bankId).then(({ count }) => count || 0)
+    );
+  }
+  const counts = await Promise.all(promises);
+  return counts.reduce((a, b) => a + b, 0);
+}
+
+export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
   const familyId = getFamilyId();
   const all = [];
   const seen = new Set();
 
-  if (selectedBanks.includes("custom")) {
-    const customWords = await getAllWords();
-    for (const w of customWords) {
-      seen.add(w.word.toLowerCase());
-      all.push({ ...w, _source: "custom" });
-    }
+  const bankIds = selectedBanks.filter((b) => b !== "custom");
+
+  async function loadCustom() {
+    if (!selectedBanks.includes("custom")) return [];
+    return getAllWords();
   }
 
-  const bankIds = selectedBanks.filter((b) => b !== "custom");
-  if (!bankIds.length) return all;
-
-  // 批量加载所有选中词库的 bank_words
-  const bankWords = [];
-  for (const bankId of bankIds) {
+  async function loadBankPages(bankId) {
+    const results = [];
     let from = 0;
     while (true) {
       const { data } = await supabase
         .from("bank_words")
         .select("*")
         .eq("bank_id", bankId)
+        .order("word")
         .range(from, from + 999);
       if (!data?.length) break;
-      bankWords.push(...data);
+      results.push(...data);
       if (data.length < 1000) break;
       from += 1000;
     }
+    return results;
   }
 
-  // 批量加载该家庭所有 bank_word 的 progress
-  const progressMap = {};
-  let pFrom = 0;
-  while (true) {
-    const { data } = await supabase
-      .from("progress")
-      .select("*")
-      .eq("family_id", familyId)
-      .not("bank_word_id", "is", null)
-      .range(pFrom, pFrom + 999);
-    if (!data?.length) break;
-    for (const p of data) progressMap[p.bank_word_id] = p;
-    if (data.length < 1000) break;
-    pFrom += 1000;
+  async function loadProgress() {
+    const map = {};
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("progress")
+        .select("*")
+        .eq("family_id", familyId)
+        .not("bank_word_id", "is", null)
+        .range(from, from + 999);
+      if (!data?.length) break;
+      for (const p of data) map[p.bank_word_id] = p;
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+    return map;
   }
 
+  if (limit) {
+    const customWords = await loadCustom();
+    for (const w of customWords) {
+      seen.add(w.word.toLowerCase());
+      all.push({ ...w, _source: "custom" });
+    }
+    if (all.length >= limit) return all.slice(0, limit);
+
+    const remaining = limit - all.length;
+    for (const bankId of bankIds) {
+      const { data } = await supabase
+        .from("bank_words")
+        .select("*")
+        .eq("bank_id", bankId)
+        .order("word")
+        .limit(remaining + 100);
+      if (data) {
+        for (const bw of data) {
+          const key = bw.word.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const norm = normalizeBankWord(bw);
+          norm.progress = [];
+          norm._source = bw.bank_id;
+          all.push(norm);
+          if (all.length >= limit) break;
+        }
+      }
+      if (all.length >= limit) break;
+    }
+    return all.slice(0, limit);
+  }
+
+  const [customWords, progressMap, ...bankResults] = await Promise.all([
+    loadCustom(),
+    bankIds.length ? loadProgress() : Promise.resolve({}),
+    ...bankIds.map(loadBankPages),
+  ]);
+
+  for (const w of customWords) {
+    seen.add(w.word.toLowerCase());
+    all.push({ ...w, _source: "custom" });
+  }
+
+  const bankWords = bankResults.flat();
   for (const bw of bankWords) {
     const key = bw.word.toLowerCase();
     if (seen.has(key)) continue;

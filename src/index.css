@@ -736,6 +736,11 @@ button.learn-next-btn {
 }
 .spell-result.correct { color: var(--success); background: var(--success-bg); }
 .spell-result.wrong { color: var(--danger); background: var(--danger-bg); }
+.spelling-variant-hint {
+  margin-top: 8px; font-size: 13px; color: #888;
+  text-align: center;
+}
+.spelling-variant-hint strong { color: #666; }
 
 /* Spell correct/wrong feedback */
 .spell-input.spell-correct input {
@@ -914,9 +919,23 @@ button.learn-next-btn {
 .settings-row {
   display: flex; align-items: center; gap: 12px;
 }
+.settings-row + .settings-row {
+  margin-top: 12px;
+}
 .settings-label {
   font-size: 15px; font-weight: 600; color: var(--text);
   white-space: nowrap;
+}
+.pron-switch {
+  display: flex; gap: 0; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--border); cursor: pointer; user-select: none;
+}
+.pron-option {
+  padding: 6px 14px; font-size: 13px; font-weight: 500;
+  color: #888; background: var(--card); transition: all 0.2s;
+}
+.pron-option.pron-active {
+  background: var(--accent); color: #fff;
 }
 .slider-value {
   font-size: 20px; font-weight: 700; color: var(--accent);

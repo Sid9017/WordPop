@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio } from "../lib/api";
+import { getQuizWords, getTodayQuizDone, recordQuiz, updateMasteryStatus, playAudio, setAudioPref } from "../lib/api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Confetti from "../components/Confetti";
+import { isSpellingVariant, getWordForms } from "../lib/spelling";
+import { getPronunciationPref } from "../lib/family";
 
 
 function primaryMeaning(text) {
@@ -11,8 +13,13 @@ function primaryMeaning(text) {
 
 function maskWord(text, word) {
   if (!text || !word) return text;
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(escaped, "gi"), "____");
+  const forms = word.includes("/") ? word.split("/") : [word];
+  let result = text;
+  for (const f of forms) {
+    const escaped = f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(escaped, "gi"), "____");
+  }
+  return result;
 }
 
 const NAME_PATTERN = /人名|男子名|女子名|男名|女名|姓氏/;
@@ -36,6 +43,8 @@ function shuffle(arr) {
   }
   return a;
 }
+
+
 
 function makeOptions(correct, allWords, field) {
   const options = [correct];
@@ -227,6 +236,7 @@ export default function QuizPage() {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
     (async () => {
+      getPronunciationPref().then(p => setAudioPref(p));
       const saved = loadQuizProgress(storageKey);
       if (saved && saved.phase !== "done" && saved.questions?.length) {
         setAllWords(saved.allWords || []);
@@ -281,7 +291,7 @@ export default function QuizPage() {
     const key = `${qIdx}-${q.word.word}`;
     if (lastPlayedRef.current === key) return;
     lastPlayedRef.current = key;
-    const timer = setTimeout(() => playAudio(q.word.word, 2), 300);
+    const timer = setTimeout(() => playAudio(q.word.word), 300);
     return () => clearTimeout(timer);
   }, [questions, qIdx]);
 
@@ -289,11 +299,17 @@ export default function QuizPage() {
     if (answered) return;
     const q = currentQ;
     let correct = false;
-    if (q.type === "cn2en") correct = answer === q.word.word;
-    else if (q.type === "en2cn") correct = answer === q.display_cn;
-    else if (q.type === "spell" || q.type === "newSpell") {
+    if (q.type === "cn2en") {
+      correct = answer === q.word.word;
+    } else if (q.type === "en2cn") {
+      correct = answer === q.display_cn;
+    } else if (q.type === "spell" || q.type === "newSpell") {
       const normalize = (s) => s.replace(/[\s\u00A0\u3000]+/g, " ").trim().toLowerCase();
-      correct = normalize(answer) === normalize(q.word.word);
+      const na = normalize(answer);
+      correct = getWordForms(q.word.word).some(f => {
+        const nf = normalize(f);
+        return na === nf || isSpellingVariant(na, nf);
+      });
     }
 
     setAnswered(true);
@@ -440,7 +456,7 @@ export default function QuizPage() {
                   {q.options.map((opt, i) => (
                     <button key={i}
                       className={`option ${answered ? (opt === q.word.word ? "correct" : opt === selected ? "wrong" : "") : ""}`}
-                      onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt, 2); }}>
+                      onClick={() => { if (!answered) handleAnswer(opt); else playAudio(opt); }}>
                       <span className="option-letter">{String.fromCharCode(65 + i)}</span>
                       {opt}
                     </button>
@@ -452,7 +468,7 @@ export default function QuizPage() {
               <>
                 <div className="quiz-type-badge">看英文 · 选中文</div>
                 <div className="quiz-prompt-area">
-                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word)}>
                     {q.word.word}
                 </h2>
                   <span className="phonetic">{q.word.phonetic}</span>
@@ -489,7 +505,7 @@ export default function QuizPage() {
                       </span>
                     )}
                     {q.word.phonetic && (
-                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word)}>
                         <span className="phonetic-label">US</span>
                         <span className="phonetic">{q.word.phonetic}</span>
                       </span>
@@ -507,7 +523,7 @@ export default function QuizPage() {
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
-                      <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                      <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word)}>
                         {q.word.word}
                       </span></>
                     )}
@@ -535,7 +551,7 @@ export default function QuizPage() {
                       </span>
                     )}
                     {q.word.phonetic && (
-                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                      <span className="phonetic-item phonetic-clickable" onClick={() => playAudio(q.word.word)}>
                         <span className="phonetic-label">US</span>
                         <span className="phonetic">{q.word.phonetic}</span>
                       </span>
@@ -553,7 +569,7 @@ export default function QuizPage() {
                 {answered && (
                   <p className={`spell-result ${isCorrect ? "correct" : "wrong"}`}>
                     {isCorrect ? "正确！" : (
-                      <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word, 2)}>
+                      <>正确答案: <span className="quiz-word-clickable" onClick={() => playAudio(q.word.word)}>
                         {q.word.word}
                       </span></>
                     )}
