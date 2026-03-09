@@ -61,6 +61,7 @@ export default function ParentPage() {
   const [selectedBanks, setSelectedBanks] = useState(["custom"]);
   const [wordsLoading, setWordsLoading] = useState(false);
   const hintTimer = useRef(null);
+  const sliderRef = useRef(null);
 
   const importTask = useGlobalImportTask();
 
@@ -218,6 +219,7 @@ export default function ParentPage() {
           <span className="slider-value">{dailyNew}</span>
           <div className="slider-wrap">
             <input
+              ref={sliderRef}
               type="range"
               className="settings-slider"
               min={5}
@@ -226,6 +228,15 @@ export default function ParentPage() {
               value={dailyNew}
               disabled={dailyNewSaving}
               style={{ "--slider-pct": `${((dailyNew - 5) / 25) * 100}%` }}
+              onTouchStart={(e) => {
+                const rect = sliderRef.current.getBoundingClientRect();
+                const x = e.touches[0].clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, x / rect.width));
+                const v = Math.round(5 + pct * 25);
+                const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+                nativeSet.call(sliderRef.current, v);
+                sliderRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+              }}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 setDailyNew(v);
