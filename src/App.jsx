@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { getFamilyId } from "./lib/family";
 import { ArrowLeftIcon } from "./components/Icons";
 import ImportProgress from "./components/ImportProgress";
+import AuroraBackground from "./components/AuroraBackground";
 import HomePage from "./pages/HomePage";
 import ParentPage from "./pages/ParentPage";
 import ChildPage from "./pages/ChildPage";
@@ -34,6 +35,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="app">
+        <AuroraBackground />
         <ImportProgress />
         <BackButton />
         <Routes>

@@ -13,19 +13,151 @@
   --warning: #f39c12;
   --warning-bg: #fff3e0;
   --bg: #f5f6fa;
-  --card: #ffffff;
+  --card: rgba(255, 255, 255, 0.72);
+  --card-solid: #ffffff;
   --text: #1a1a2e;
   --text-light: #7f8c8d;
   --border: #e2e8f0;
   --radius: 10px;
 }
 
+html {
+  background: var(--bg);
+}
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   min-height: 100dvh;
   overflow-x: hidden;
+}
+.settings-section,
+.bank-selector,
+.invite-section,
+.preview-card,
+.word-item,
+.checkin-section,
+.learn-card,
+.quiz-card,
+.result-card,
+.pin-box,
+.home-btn,
+.batch-preview,
+.word-browser {
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* ===== Aurora Background ===== */
+.aurora-bg {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; overflow: hidden;
+}
+.app { position: relative; z-index: 1; }
+.aurora-blob {
+  position: absolute; border-radius: 50%;
+  filter: blur(60px); opacity: 1;
+  will-change: transform;
+}
+.aurora-blob-1 {
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, #6c5ce7, transparent 70%);
+  animation: aDrift1 8s ease-in-out infinite;
+}
+.aurora-blob-2 {
+  width: 180px; height: 180px;
+  background: radial-gradient(circle, #fd79a8, transparent 70%);
+  animation: aDrift2 10s ease-in-out infinite;
+}
+.aurora-blob-3 {
+  width: 190px; height: 190px;
+  background: radial-gradient(circle, #74b9ff, transparent 70%);
+  animation: aDrift3 9s ease-in-out infinite;
+}
+.aurora-blob-4 {
+  width: 170px; height: 170px;
+  background: radial-gradient(circle, #a29bfe, transparent 70%);
+  animation: aDrift4 11s ease-in-out infinite;
+}
+.aurora-blob-5 {
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, #e84393, transparent 70%);
+  animation: aDrift5 7s ease-in-out infinite;
+}
+.aurora-blob-6 {
+  width: 180px; height: 180px;
+  background: radial-gradient(circle, #0984e3, transparent 70%);
+  animation: aDrift6 9.5s ease-in-out infinite;
+}
+.aurora-blob-7 {
+  width: 150px; height: 150px;
+  background: radial-gradient(circle, #6c5ce7, transparent 70%);
+  animation: aDrift7 8.5s ease-in-out infinite;
+}
+.aurora-blob-8 {
+  width: 170px; height: 170px;
+  background: radial-gradient(circle, #fd79a8, transparent 70%);
+  animation: aDrift8 10.5s ease-in-out infinite;
+}
+.aurora-blob-9 {
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, #74b9ff, transparent 70%);
+  animation: aDrift9 7.5s ease-in-out infinite;
+}
+
+@keyframes aDrift1 {
+  0%, 100% { top: -40px; left: -30px; }
+  25% { top: 10px; left: 50px; }
+  50% { top: 60px; left: 10px; }
+  75% { top: 20px; left: -70px; }
+}
+@keyframes aDrift2 {
+  0%, 100% { top: 25%; right: -40px; }
+  25% { top: 20%; right: 20px; }
+  50% { top: 30%; right: -80px; }
+  75% { top: 18%; right: 40px; }
+}
+@keyframes aDrift3 {
+  0%, 100% { bottom: 20%; left: 10%; }
+  25% { bottom: 25%; left: 15%; }
+  50% { bottom: 15%; left: 5%; }
+  75% { bottom: 22%; left: 18%; }
+}
+@keyframes aDrift4 {
+  0%, 100% { top: 55%; right: 10%; }
+  25% { top: 50%; right: 5%; }
+  50% { top: 60%; right: 15%; }
+  75% { top: 52%; right: 0%; }
+}
+@keyframes aDrift5 {
+  0%, 100% { top: 10%; left: 45%; }
+  25% { top: 15%; left: 50%; }
+  50% { top: 5%; left: 40%; }
+  75% { top: 12%; left: 55%; }
+}
+@keyframes aDrift6 {
+  0%, 100% { bottom: -20px; right: 25%; }
+  25% { bottom: 30px; right: 20%; }
+  50% { bottom: -10px; right: 30%; }
+  75% { bottom: 20px; right: 15%; }
+}
+@keyframes aDrift7 {
+  0%, 100% { top: 75%; left: -20px; }
+  25% { top: 70%; left: 30px; }
+  50% { top: 78%; left: -40px; }
+  75% { top: 72%; left: 10px; }
+}
+@keyframes aDrift8 {
+  0%, 100% { bottom: 40%; left: 60%; }
+  25% { bottom: 35%; left: 55%; }
+  50% { bottom: 45%; left: 65%; }
+  75% { bottom: 38%; left: 52%; }
+}
+@keyframes aDrift9 {
+  0%, 100% { top: 40%; left: 20%; }
+  25% { top: 35%; left: 25%; }
+  50% { top: 45%; left: 15%; }
+  75% { top: 38%; left: 28%; }
 }
 
 .app { max-width: 600px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
