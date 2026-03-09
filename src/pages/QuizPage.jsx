@@ -291,7 +291,10 @@ export default function QuizPage() {
     let correct = false;
     if (q.type === "cn2en") correct = answer === q.word.word;
     else if (q.type === "en2cn") correct = answer === q.display_cn;
-    else if (q.type === "spell" || q.type === "newSpell") correct = answer.trim().toLowerCase() === q.word.word.toLowerCase();
+    else if (q.type === "spell" || q.type === "newSpell") {
+      const normalize = (s) => s.replace(/[\s\u00A0\u3000]+/g, " ").trim().toLowerCase();
+      correct = normalize(answer) === normalize(q.word.word);
+    }
 
     setAnswered(true);
     setIsCorrect(correct);

@@ -80,14 +80,18 @@ button {
   font-size: 15px; font-weight: 600; transition: all 0.2s ease;
   background: var(--card); color: var(--text); border: 1px solid var(--border);
 }
-button:hover { background: var(--bg); transform: translateY(-1px); }
+@media (hover: hover) {
+  button:hover { background: var(--bg); transform: translateY(-1px); }
+}
 button:active { transform: translateY(0) scale(0.98); }
 button:disabled { opacity: 0.4; cursor: default; transform: none; }
 
 .btn-primary {
   background: var(--primary); color: #fff; border: 1px solid var(--primary);
 }
-.btn-primary:hover { background: #5a4bd6; border-color: #5a4bd6; }
+@media (hover: hover) {
+  .btn-primary:hover { background: #5a4bd6; border-color: #5a4bd6; }
+}
 
 .btn-save { background: var(--success); color: #fff; border: 1px solid var(--success); width: 100%; padding: 14px; font-size: 16px; margin-top: 12px; }
 .btn-save:hover { background: #00a383; border-color: #00a383; }
@@ -152,13 +156,17 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 .home-btn:first-child { animation-delay: 0.1s; }
 .home-btn:last-child { animation-delay: 0.25s; }
-.home-btn:hover { border-color: var(--primary); transform: translateY(-4px); background: var(--primary-bg); }
+@media (hover: hover) {
+  .home-btn:hover { border-color: var(--primary); transform: translateY(-4px); background: var(--primary-bg); }
+}
 .home-btn .btn-icon {
   width: 44px; height: 44px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 28px; transition: transform 0.3s;
 }
-.home-btn:hover .btn-icon { transform: scale(1.15) rotate(-5deg); }
+@media (hover: hover) {
+  .home-btn:hover .btn-icon { transform: scale(1.15) rotate(-5deg); }
+}
 .home-btn strong { font-size: 15px; }
 .home-btn small { font-size: 12px; color: var(--text-light); }
 
@@ -480,7 +488,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   line-height: 1.5;
 }
 
-.learn-next-btn {
+button.learn-next-btn {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   width: calc(100% - 32px); max-width: 568px;
   padding: 14px; font-size: 16px; font-weight: 700;
@@ -489,9 +497,12 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   box-shadow: 0 4px 16px rgba(108, 92, 231, 0.3);
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.learn-next-btn:hover {
-  transform: translateX(-50%) translateY(-1px);
-  box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+@media (hover: hover) {
+  button.learn-next-btn:hover {
+    transform: translateX(-50%) translateY(-1px);
+    box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+  }
 }
 .learn-next-btn:active { transform: translateX(-50%) scale(0.97); }
 
@@ -626,12 +637,14 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 .option:nth-child(2),
 .option:nth-child(3),
 .option:nth-child(4) { animation-delay: 0s; }
-.option:hover:not(:disabled) {
-  background: var(--primary-bg); border-color: var(--primary-light);
-  transform: none;
-}
-.option:hover:not(:disabled) .option-letter {
-  border-color: var(--primary-light); color: var(--primary);
+@media (hover: hover) {
+  .option:hover:not(:disabled) {
+    background: var(--primary-bg); border-color: var(--primary-light);
+    transform: none;
+  }
+  .option:hover:not(:disabled) .option-letter {
+    border-color: var(--primary-light); color: var(--primary);
+  }
 }
 .option.correct {
   background: var(--success-bg); border-color: var(--success);
@@ -654,7 +667,9 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   background: var(--primary); border: none; color: #fff;
   width: 100%; max-width: 460px;
 }
-.btn-next:hover { background: #5a4bd6; transform: none; }
+@media (hover: hover) {
+  .btn-next:hover { background: #5a4bd6; transform: none; }
+}
 
 /* ===== Result ===== */
 .result-card {
@@ -694,7 +709,9 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   width: 100%; padding: 15px; border-radius: 10px; font-size: 15px; font-weight: 600;
   background: var(--primary); border: none; color: #fff;
 }
-.btn-result-back:hover { background: #5a4bd6; transform: none; }
+@media (hover: hover) {
+  .btn-result-back:hover { background: #5a4bd6; transform: none; }
+}
 
 /* ===== Match Game ===== */
 .match-card { padding: 28px; border-radius: 16px; }
@@ -712,8 +729,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 .match-item.left { background: #f0edff; border-color: #e2ddf8; }
 .match-item.right { background: #e8f5f0; border-color: #cce8dd; }
-.match-item.left:not(.linked):not(.correct):not(.wrong):hover { border-color: var(--primary); transform: none !important; }
-.match-item.right:not(.linked):not(.correct):not(.wrong):hover { border-color: var(--success); transform: none !important; }
+@media (hover: hover) {
+  .match-item.left:not(.linked):not(.correct):not(.wrong):hover { border-color: var(--primary); transform: none !important; }
+  .match-item.right:not(.linked):not(.correct):not(.wrong):hover { border-color: var(--success); transform: none !important; }
+}
 .match-item.active {
   border-color: var(--primary); background: #e0dbff;
   animation: none;
@@ -837,8 +856,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 .wb-bank-card.wb-selected .wb-bank-name { color: #fff; }
 .wb-bank-card.wb-selected .wb-bank-desc { color: rgba(255,255,255,0.8); }
-.wb-bank-card.wb-selected:hover {
-  background: var(--primary-light); border-color: var(--primary-light);
+@media (hover: hover) {
+  .wb-bank-card.wb-selected:hover {
+    background: var(--primary-light); border-color: var(--primary-light);
+  }
 }
 
 /* ===== Invite Section ===== */
@@ -905,8 +926,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
   padding: 12px 8px; background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; cursor: pointer; transition: all 0.15s;
 }
-.wb-bank-card:hover {
-  border-color: var(--primary-light); background: var(--primary-bg);
+@media (hover: hover) {
+  .wb-bank-card:hover {
+    border-color: var(--primary-light); background: var(--primary-bg);
+  }
 }
 .wb-bank-name { font-size: 15px; font-weight: 600; color: var(--text); }
 .wb-bank-desc { font-size: 11px; color: var(--text-light); }
