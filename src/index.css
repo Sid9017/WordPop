@@ -1183,3 +1183,93 @@ button.learn-next-btn {
   .stage-filters { gap: 4px; }
   .stage-filter-btn { padding: 4px 8px; font-size: 11px; }
 }
+
+/* ===== iPhone Portrait (≤430px) ===== */
+@media (max-width: 430px) {
+  /* -- General -- */
+  .page-title { font-size: 20px; }
+  .back-btn { padding: 6px 10px; font-size: 13px; }
+
+  /* -- Calendar -- */
+  .checkin-section { padding: 16px 12px; }
+  .cal-month-label { font-size: 24px; padding: 6px 18px; }
+  .calendar { gap: 4px; padding: 8px; }
+  .cal-weekday { font-size: 10px; padding: 4px 0; }
+  .cal-day { border-radius: 8px; font-size: 14px; }
+  .cal-num { font-size: 15px; }
+  .cal-check { font-size: 9px; }
+
+  /* -- Bubble buttons (学学/测测) -- */
+  .bb { font-size: 14px; }
+  .cal-day.today { min-height: 0; }
+  .cal-day.today-open { min-height: 52px; }
+
+  /* -- Quiz Page -- */
+  .quiz-card { padding: 22px 14px 26px; }
+  .quiz-prompt { font-size: 22px; }
+  .quiz-type-badge { font-size: 11px; margin-bottom: 18px; }
+  .quiz-prompt-area { margin-bottom: 20px; }
+  .option { padding: 12px 14px; font-size: 13px; gap: 10px; }
+  .option-letter { width: 24px; height: 24px; font-size: 10px; border-radius: 6px; }
+  .options { gap: 8px; }
+  .spell-input { gap: 8px; margin-top: 20px; }
+  .spell-input input { font-size: 16px; padding: 12px 14px; letter-spacing: 1.5px; }
+  .spell-input .btn-primary { padding: 12px 18px; font-size: 14px; }
+  .spell-definition { padding: 14px; }
+  .spell-meaning-item { font-size: 14px; gap: 8px; margin-bottom: 10px; }
+  .spell-meaning-item .pos-tag { min-width: 64px; font-size: 11px; }
+  .phonetic-row { gap: 10px; margin: 6px 0; }
+  .phonetic-item { font-size: 13px; }
+  .btn-next { margin-top: 20px; padding: 14px 30px; font-size: 14px; }
+
+  /* -- Match Game -- */
+  .match-card { padding: 20px 12px; }
+  .match-grid { gap: 6px 8px; }
+  .match-item { padding: 10px 6px; font-size: 13px; min-height: 42px; }
+
+  /* -- Result Card -- */
+  .result-card { padding: 30px 16px 24px; }
+  .result-title { font-size: 22px; margin-bottom: 20px; }
+  .score-ring { width: 110px; height: 110px; margin-bottom: 20px; }
+  .score-num { font-size: 28px; }
+  .result-stat-num { font-size: 20px; }
+  .result-stat-label { font-size: 10px; }
+
+  /* -- Learn Page -- */
+  .learn-card { padding: 18px 14px; }
+  .learn-word { font-size: 26px; }
+  .learn-phonetics { gap: 10px; margin-bottom: 16px; }
+  .learn-ph { font-size: 13px; padding: 3px 8px; }
+  .learn-cn { font-size: 15px; }
+  .learn-meaning { padding: 10px 12px; }
+  .learn-ex-en { font-size: 13px; }
+  .learn-ex-cn { font-size: 12px; }
+  button.learn-next-btn { padding: 12px; font-size: 15px; border-radius: 12px; }
+
+  /* -- Parent Page -- */
+  .settings-section { padding: 12px 14px; }
+  .settings-label { font-size: 14px; }
+  .settings-row { gap: 8px; }
+  .pron-option { padding: 5px 10px; font-size: 12px; }
+  .bank-selector { padding: 12px 14px; }
+  .bank-selector-label { font-size: 14px; }
+  .wb-bank-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; }
+  .wb-bank-card { padding: 10px 6px; }
+  .wb-bank-name { font-size: 14px; }
+  .wb-bank-desc { font-size: 10px; }
+  .input-row { gap: 6px; }
+  .input-row input { font-size: 14px; padding: 10px 12px; }
+
+  /* -- Word Browser -- */
+  .word-item-header { padding: 10px 12px; gap: 6px; }
+  .word-item-word { font-size: 14px; }
+  .word-item-brief { font-size: 12px; max-width: 38%; }
+  .stage-badge { font-size: 10px; padding: 2px 6px; }
+  .word-source-tag { font-size: 9px; padding: 1px 5px; }
+  .word-item-detail { padding: 4px 12px 12px 28px; }
+
+  /* -- Invite Section -- */
+  .invite-section { padding: 16px; }
+  .invite-section h2 { font-size: 16px; }
+  .invite-link-box input { font-size: 12px; padding: 8px 10px; }
+}
