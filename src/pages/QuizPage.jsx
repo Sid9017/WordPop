@@ -71,7 +71,7 @@ function buildQuestions(words) {
   const newQuestions = newValid.map((w) => {
     const m = filterMeanings(w)[0];
     const display_cn = primaryMeaning(m.meaning_cn);
-    return { word: w, meaning: m, display_cn, type: "newSpell", wordObj: w, meaningId: m.id };
+    return { word: w, meaning: m, display_cn, type: "newWord", wordObj: w, meaningId: m.id, options: makeOptions(display_cn, words, "meaning_cn") };
   });
 
   const tiers = [20, 15, 10, 5];
@@ -223,6 +223,8 @@ export default function QuizPage() {
   const [answered, setAnswered] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [wrongOnes, setWrongOnes] = useState([]);
+  const [newWordStep, setNewWordStep] = useState(1);
+  const [step1Pick, setStep1Pick] = useState(null);
   const [phase, setPhase] = useState("quiz");
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -244,6 +246,8 @@ export default function QuizPage() {
         setQIdx(saved.qIdx || 0);
         setScore(saved.score || { correct: 0, total: 0 });
         setWrongOnes(saved.wrongOnes || []);
+        setNewWordStep(saved.newWordStep || 1);
+        setStep1Pick(saved.step1Pick ?? null);
         setPhase(saved.phase || "quiz");
         setAnswered(saved.answered || false);
         setIsCorrect(saved.isCorrect || false);
@@ -277,9 +281,9 @@ export default function QuizPage() {
     }
     saveQuizProgress(storageKey, {
       allWords, questions, qIdx, score, wrongOnes, phase,
-      answered, isCorrect, selected, spellInput,
+      answered, isCorrect, selected, spellInput, newWordStep, step1Pick,
     });
-  }, [questions, qIdx, score, wrongOnes, phase, answered, isCorrect, selected, spellInput]);
+  }, [questions, qIdx, score, wrongOnes, phase, answered, isCorrect, selected, spellInput, newWordStep, step1Pick]);
 
   const currentQ = questions[qIdx];
   const lastPlayedRef = useRef("");
@@ -288,22 +292,59 @@ export default function QuizPage() {
     if (!questions.length || phase === "done" || transitioning) return;
     const q = questions[qIdx];
     if (!q || q.type === "match" || q.type === "cn2en") return;
-    const key = `${qIdx}-${q.word.word}`;
+    if (q.type === "newWord" && newWordStep === 2) return;
+    const key = `${qIdx}-${q.word.word}${q.type === "newWord" ? `-s${newWordStep}` : ""}`;
     if (lastPlayedRef.current === key) return;
     lastPlayedRef.current = key;
     const timer = setTimeout(() => playAudio(q.word.word), 300);
     return () => clearTimeout(timer);
-  }, [questions, qIdx]);
+  }, [questions, qIdx, newWordStep]);
 
   const handleAnswer = useCallback(async (answer) => {
     if (answered) return;
     const q = currentQ;
+
+    if (q.type === "newWord") {
+      if (step1Pick) return;
+      if (newWordStep === 1) {
+        const isRight = answer === q.display_cn;
+        setStep1Pick(answer);
+        if (isRight) {
+          setTimeout(() => {
+            setNewWordStep(2);
+            setStep1Pick(null);
+            setSpellInput("");
+          }, 600);
+        } else {
+          setAnswered(true);
+          setIsCorrect(false);
+          setScore(s => ({ correct: s.correct, total: s.total + 1 }));
+          setWrongOnes(prev => [...prev, q]);
+          await recordQuiz(q.wordObj, q.meaningId, "en2cn", false);
+        }
+        return;
+      }
+      const normalize = (s) => s.replace(/[\s\u00A0\u3000\-]+/g, " ").trim().toLowerCase();
+      const na = normalize(answer);
+      const correct = getWordForms(q.word.word).some(f => {
+        const nf = normalize(f);
+        return na === nf || isSpellingVariant(na, nf);
+      });
+      setAnswered(true);
+      setIsCorrect(correct);
+      setSelected(answer);
+      setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }));
+      if (!correct) setWrongOnes(prev => [...prev, q]);
+      await recordQuiz(q.wordObj, q.meaningId, "spell", correct);
+      return;
+    }
+
     let correct = false;
     if (q.type === "cn2en") {
       correct = answer === q.word.word;
     } else if (q.type === "en2cn") {
       correct = answer === q.display_cn;
-    } else if (q.type === "spell" || q.type === "newSpell") {
+    } else if (q.type === "spell") {
       const normalize = (s) => s.replace(/[\s\u00A0\u3000\-]+/g, " ").trim().toLowerCase();
       const na = normalize(answer);
       correct = getWordForms(q.word.word).some(f => {
@@ -317,8 +358,8 @@ export default function QuizPage() {
     setSelected(answer);
     setScore((s) => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }));
     if (!correct) setWrongOnes((prev) => [...prev, q]);
-    await recordQuiz(q.wordObj, q.meaningId, q.type === "newSpell" ? "spell" : q.type, correct);
-  }, [answered, currentQ]);
+    await recordQuiz(q.wordObj, q.meaningId, q.type, correct);
+  }, [answered, currentQ, newWordStep, step1Pick]);
 
   function handleMatchComplete(allCorrect) {
     const q = currentQ;
@@ -346,6 +387,7 @@ export default function QuizPage() {
         const retryQs = wrongOnes.map((q) => {
           if (q.type === "cn2en") return { ...q, options: makeOptions(q.word.word, allWords, "word") };
           if (q.type === "en2cn") return { ...q, options: makeOptions(q.display_cn, allWords, "meaning_cn") };
+          if (q.type === "newWord") return { ...q, options: makeOptions(q.display_cn, allWords, "meaning_cn") };
           return { ...q };
         });
         setQuestions(shuffle(retryQs));
@@ -367,6 +409,8 @@ export default function QuizPage() {
     setSpellInput("");
     setAnswered(false);
     setIsCorrect(false);
+    setNewWordStep(1);
+    setStep1Pick(null);
   }
 
   if (loading) return <div className="page center"><p className="loading-text">加载题目中...</p></div>;
@@ -445,7 +489,7 @@ export default function QuizPage() {
         {q.type === "match" ? (
           <MatchGame key={qIdx} pairs={q.pairs} onComplete={handleMatchComplete} />
         ) : (
-          <div className={`quiz-card quiz-type-${q.type}`} key={qIdx}>
+          <div className={`quiz-card quiz-type-${q.type}`} key={`${qIdx}${q.type === "newWord" ? `-${newWordStep}` : ""}`}>
             {q.type === "cn2en" && (
               <>
                 <div className="quiz-type-badge">看中文 · 选英文</div>
@@ -531,7 +575,29 @@ export default function QuizPage() {
                 )}
               </>
             )}
-            {q.type === "newSpell" && (
+            {q.type === "newWord" && newWordStep === 1 && (
+              <>
+                <div className="quiz-type-badge">🆕 新词 · 选释义</div>
+                <div className="quiz-prompt-area">
+                  <h2 className="quiz-prompt quiz-word-clickable" onClick={() => playAudio(q.word.word)}>
+                    {q.word.word}
+                  </h2>
+                  <span className="phonetic">{q.word.phonetic}</span>
+                </div>
+                <div className="options">
+                  {q.options.map((opt, i) => (
+                    <button key={i}
+                      className={`option ${step1Pick ? (opt === q.display_cn ? "correct" : opt === step1Pick ? "wrong" : "") : ""}`}
+                      onClick={() => handleAnswer(opt)}
+                      disabled={!!step1Pick}>
+                      <span className="option-letter">{String.fromCharCode(65 + i)}</span>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {q.type === "newWord" && newWordStep === 2 && (
               <>
                 <div className="quiz-type-badge">🆕 新词 · 拼写</div>
                 <div className="quiz-prompt-area">

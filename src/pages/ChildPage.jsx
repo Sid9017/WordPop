@@ -11,7 +11,8 @@ export default function ChildPage() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBubble, setShowBubble] = useState(false);
-  const bubbleRef = useRef(null);
+  const drawerRef = useRef(null);
+  const todayCellRef = useRef(null);
 
   const refresh = useCallback(async () => {
     const [checks, done] = await Promise.all([
@@ -40,7 +41,9 @@ export default function ChildPage() {
   useEffect(() => {
     if (!showBubble) return;
     function handleClick(e) {
-      if (bubbleRef.current && !bubbleRef.current.contains(e.target)) setShowBubble(false);
+      if (drawerRef.current?.contains(e.target)) return;
+      if (todayCellRef.current?.contains(e.target)) return;
+      setShowBubble(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -69,6 +72,35 @@ export default function ChildPage() {
 
   const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
+  let daysBeforeDrawer = calendarDays;
+  let daysAfterDrawer = [];
+  if (isCurrentMonth) {
+    const todayDate = today.getDate();
+    const todayGridPos = firstDow + todayDate - 1;
+    const todayRow = Math.floor(todayGridPos / 7);
+    const rowEndDay = Math.min((todayRow + 1) * 7 - firstDow, daysInMonth);
+    daysBeforeDrawer = calendarDays.slice(0, rowEndDay);
+    daysAfterDrawer = calendarDays.slice(rowEndDay);
+  }
+
+  const renderDay = (day) => {
+    const isToday = day === todayStr;
+    const isDone = checkins.includes(day);
+    const isFuture = day > todayStr;
+    return (
+      <div
+        key={day}
+        ref={isToday ? todayCellRef : undefined}
+        className={`cal-day ${isDone ? "active" : ""} ${isToday ? "today clickable" : ""} ${isFuture ? "cal-future" : ""}`}
+        title={day}
+        onClick={() => { if (isToday) setShowBubble(prev => !prev); }}
+      >
+        <span className="cal-num">{parseInt(day.slice(8))}</span>
+        {isDone && <span className="cal-check">✓</span>}
+      </div>
+    );
+  };
+
   if (loading) return <div className="page center"><p className="loading-text">加载中...</p></div>;
 
   return (
@@ -90,38 +122,27 @@ export default function ChildPage() {
           {Array.from({ length: firstDow }, (_, i) => (
             <div key={`blank-${i}`} className="cal-day cal-blank" />
           ))}
-          {calendarDays.map((day) => {
-            const isToday = day === todayStr;
-            const isDone = checkins.includes(day);
-            const isFuture = day > todayStr;
-            return (
-              <div
-                key={day}
-                ref={isToday ? bubbleRef : undefined}
-                className={`cal-day ${isDone ? "active" : ""} ${isToday ? "today" : ""} ${isToday ? "clickable" : ""} ${isFuture ? "cal-future" : ""} ${isToday && showBubble ? "today-open" : ""}`}
-                title={day}
-                onClick={() => { if (isToday && !showBubble) setShowBubble(true); }}
-              >
-                {isToday && showBubble ? (
-                  <>
-                    <button
-                      className="bb bb-learn"
-                      onClick={(e) => { e.stopPropagation(); setShowBubble(false); navigate(quizDone ? "/child/learn?extra=1" : "/child/learn"); }}
-                    >学学</button>
-                    <button
-                      className="bb bb-quiz"
-                      onClick={(e) => { e.stopPropagation(); setShowBubble(false); navigate(quizDone ? "/child/quiz?extra=1" : "/child/quiz"); }}
-                    >测测</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="cal-num">{parseInt(day.slice(8))}</span>
-                    {isDone && <span className="cal-check">✓</span>}
-                  </>
+          {daysBeforeDrawer.map(renderDay)}
+          {isCurrentMonth && (
+            <div className={`cal-drawer-row ${showBubble ? "open" : ""}`} ref={drawerRef}>
+              <div className="drawer-row-content">
+                {quizDone && (
+                  <p className="drawer-hint">今天已完成一轮学习 🎉 要再多学一点吗？</p>
                 )}
+                <div className="drawer-buttons">
+                  <button className="drawer-btn drawer-btn-learn"
+                    onClick={() => { setShowBubble(false); navigate(quizDone ? "/child/learn?extra=1" : "/child/learn"); }}>
+                    📖 学学
+                  </button>
+                  <button className="drawer-btn drawer-btn-quiz"
+                    onClick={() => { setShowBubble(false); navigate(quizDone ? "/child/quiz?extra=1" : "/child/quiz"); }}>
+                    ✏️ 测测
+                  </button>
+                </div>
               </div>
-            );
-          })}
+            </div>
+          )}
+          {daysAfterDrawer.map(renderDay)}
         </div>
         <p className="streak">
           最近30天打卡 {checkins.length} 天
