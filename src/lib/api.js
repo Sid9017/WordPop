@@ -205,6 +205,27 @@ export async function getAllWords() {
   return all;
 }
 
+/** 家长列表用：无 meanings，体积小 */
+export async function getAllWordsSummary() {
+  const familyId = getFamilyId();
+  const all = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const { data } = await supabase
+      .from("words")
+      .select("id, word, phonetic, uk_phonetic, progress(correct_count, wrong_count, stage)")
+      .eq("family_id", familyId)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (!data?.length) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 export async function getSelectedWordCount(selectedBanks) {
   const familyId = getFamilyId();
   const promises = [];
@@ -224,43 +245,50 @@ export async function getSelectedWordCount(selectedBanks) {
   return counts.reduce((a, b) => a + b, 0);
 }
 
-export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
+export async function getAllSelectedWords(selectedBanks, { limit, summary } = {}) {
   const familyId = getFamilyId();
   const all = [];
   const seen = new Set();
 
   const bankIds = selectedBanks.filter((b) => b !== "custom");
+  const bankSelect = summary ? "id, bank_id, word, us_phonetic, uk_phonetic" : "*";
 
   async function loadCustom() {
     if (!selectedBanks.includes("custom")) return [];
-    return getAllWords();
+    return summary ? getAllWordsSummary() : getAllWords();
   }
 
   async function loadBankPages(bankId) {
     const results = [];
-    let from = 0;
+    let lastWord = null;
+    const PAGE = 1000;
     while (true) {
-      const { data } = await supabase
+      let q = supabase
         .from("bank_words")
-        .select("*")
+        .select(bankSelect)
         .eq("bank_id", bankId)
         .order("word")
-        .range(from, from + 999);
+        .limit(PAGE);
+      if (lastWord != null) q = q.gt("word", lastWord);
+      const { data } = await q;
       if (!data?.length) break;
       results.push(...data);
-      if (data.length < 1000) break;
-      from += 1000;
+      if (data.length < PAGE) break;
+      lastWord = data[data.length - 1].word;
     }
     return results;
   }
 
   async function loadProgress() {
     const map = {};
+    const selectCols = summary
+      ? "id, bank_word_id, correct_count, wrong_count, stage"
+      : "*";
     let from = 0;
     while (true) {
       const { data } = await supabase
         .from("progress")
-        .select("*")
+        .select(selectCols)
         .eq("family_id", familyId)
         .not("bank_word_id", "is", null)
         .range(from, from + 999);
@@ -276,7 +304,11 @@ export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
     const customWords = await loadCustom();
     for (const w of customWords) {
       seen.add(w.word.toLowerCase());
-      all.push({ ...w, _source: "custom" });
+      all.push(
+        summary
+          ? { ...w, _source: "custom", meanings: [] }
+          : { ...w, _source: "custom" }
+      );
     }
     if (all.length >= limit) return all.slice(0, limit);
 
@@ -284,7 +316,7 @@ export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
     for (const bankId of bankIds) {
       const { data } = await supabase
         .from("bank_words")
-        .select("*")
+        .select(bankSelect)
         .eq("bank_id", bankId)
         .order("word")
         .limit(remaining + 100);
@@ -293,10 +325,14 @@ export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
           const key = bw.word.toLowerCase();
           if (seen.has(key)) continue;
           seen.add(key);
-          const norm = normalizeBankWord(bw);
-          norm.progress = [];
-          norm._source = bw.bank_id;
-          all.push(norm);
+          if (summary) {
+            all.push(bankWordToSummaryRow(bw, {}));
+          } else {
+            const norm = normalizeBankWord(bw);
+            norm.progress = [];
+            norm._source = bw.bank_id;
+            all.push(norm);
+          }
           if (all.length >= limit) break;
         }
       }
@@ -313,7 +349,11 @@ export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
 
   for (const w of customWords) {
     seen.add(w.word.toLowerCase());
-    all.push({ ...w, _source: "custom" });
+    all.push(
+      summary
+        ? { ...w, _source: "custom", meanings: [] }
+        : { ...w, _source: "custom" }
+    );
   }
 
   const bankWords = bankResults.flat();
@@ -321,10 +361,14 @@ export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
     const key = bw.word.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    const norm = normalizeBankWord(bw);
-    norm.progress = progressMap[bw.id] ? [progressMap[bw.id]] : [];
-    norm._source = bw.bank_id;
-    all.push(norm);
+    if (summary) {
+      all.push(bankWordToSummaryRow(bw, progressMap));
+    } else {
+      const norm = normalizeBankWord(bw);
+      norm.progress = progressMap[bw.id] ? [progressMap[bw.id]] : [];
+      norm._source = bw.bank_id;
+      all.push(norm);
+    }
   }
 
   return all;
@@ -332,6 +376,37 @@ export async function getAllSelectedWords(selectedBanks, { limit } = {}) {
 
 export async function deleteWord(id) {
   await supabase.from("words").delete().eq("id", id);
+}
+
+/** 家长页展开词卡时拉取完整释义（自定义词 / 预置词库词） */
+export async function fetchParentWordDetail(item) {
+  const familyId = getFamilyId();
+  if (item._isBankWord) {
+    const { data: bw, error } = await supabase
+      .from("bank_words")
+      .select("*")
+      .eq("id", item.id)
+      .single();
+    if (error || !bw) throw error || new Error("加载失败");
+    const { data: prog } = await supabase
+      .from("progress")
+      .select("*")
+      .eq("family_id", familyId)
+      .eq("bank_word_id", item.id)
+      .maybeSingle();
+    const norm = normalizeBankWord(bw);
+    norm.progress = prog ? [prog] : [];
+    norm._source = bw.bank_id;
+    return norm;
+  }
+  const { data, error } = await supabase
+    .from("words")
+    .select("*, meanings(*), progress(*)")
+    .eq("id", item.id)
+    .eq("family_id", familyId)
+    .single();
+  if (error || !data) throw error || new Error("加载失败");
+  return { ...data, _source: "custom" };
 }
 
 // ===== 闯关选词 =====
@@ -391,6 +466,20 @@ function normalizeBankWord(bw) {
   };
 }
 
+function bankWordToSummaryRow(bw, progressMap) {
+  return {
+    id: bw.id,
+    _isBankWord: true,
+    word: bw.word,
+    phonetic: bw.us_phonetic || "",
+    uk_phonetic: bw.uk_phonetic || "",
+    image_url: "",
+    meanings: [],
+    progress: progressMap[bw.id] ? [progressMap[bw.id]] : [],
+    _source: bw.bank_id,
+  };
+}
+
 export async function getQuizWords({ extra = false } = {}) {
   const familyId = getFamilyId();
 
@@ -428,18 +517,22 @@ export async function getQuizWords({ extra = false } = {}) {
 
   // 加载选中的预置词库
   const bankIds = selectedBanks.filter((b) => b !== "custom");
+  const BANK_PAGE = 1000;
   for (const bankId of bankIds) {
-    let bFrom = 0;
+    let lastWord = null;
     while (true) {
-      const { data } = await supabase
+      let q = supabase
         .from("bank_words")
         .select("*")
         .eq("bank_id", bankId)
-        .range(bFrom, bFrom + 999);
+        .order("word")
+        .limit(BANK_PAGE);
+      if (lastWord != null) q = q.gt("word", lastWord);
+      const { data } = await q;
       if (!data?.length) break;
       allWords.push(...data.map(normalizeBankWord));
-      if (data.length < 1000) break;
-      bFrom += 1000;
+      if (data.length < BANK_PAGE) break;
+      lastWord = data[data.length - 1].word;
     }
   }
 

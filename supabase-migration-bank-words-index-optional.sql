@@ -1,0 +1,8 @@
+-- 可选优化说明（在 Supabase SQL Editor 执行前请先看注释）
+--
+-- bank_words 表若已有 UNIQUE(bank_id, word)，PostgreSQL 会自带 (bank_id, word) 上的唯一索引，
+-- 按词库 + word 顺序分页时一般已够用，无需再建索引。
+--
+-- 若你的库是早期手工建的、没有该 UNIQUE，可取消下面注释执行：
+--
+-- CREATE UNIQUE INDEX IF NOT EXISTS bank_words_bank_id_word_key ON bank_words(bank_id, word);

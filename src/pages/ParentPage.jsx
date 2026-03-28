@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { lookupWord, saveWord, getAllWords, getAllSelectedWords, getSelectedWordCount, deleteWord, playAudio, batchLookupWords } from "../lib/api";
+import { lookupWord, saveWord, getAllSelectedWords, getSelectedWordCount, deleteWord, playAudio, batchLookupWords, fetchParentWordDetail } from "../lib/api";
 import { getInviteToken, getDailyNewWords, updateDailyNewWords, getSelectedBanks, updateSelectedBanks, getPronunciationPref, updatePronunciationPref } from "../lib/family";
 import { setAudioPref } from "../lib/api";
 import { SpeakerIcon } from "../components/Icons";
@@ -62,7 +62,8 @@ export default function ParentPage() {
   const [selectedBanks, setSelectedBanks] = useState(["custom"]);
   const [wordsLoading, setWordsLoading] = useState(false);
   const [wordCount, setWordCount] = useState(null);
-  const [wordsFullyLoaded, setWordsFullyLoaded] = useState(false);
+  const [detailLoadingId, setDetailLoadingId] = useState(null);
+  const detailFetchRef = useRef(new Set());
   const [pronPref, setPronPref] = useState("us");
   const hintTimer = useRef(null);
   const sliderRef = useRef(null);
@@ -75,20 +76,17 @@ export default function ParentPage() {
   const loadWords = useCallback(async (banks) => {
     const b = banks || banksRef.current;
     setWordsLoading(true);
-    setWordsFullyLoaded(false);
+    setExpandedWords({});
+    detailFetchRef.current.clear();
+    setDetailLoadingId(null);
 
-    const [count, firstPage] = await Promise.all([
+    const [count, allData] = await Promise.all([
       getSelectedWordCount(b),
-      getAllSelectedWords(b, { limit: 50 }),
+      getAllSelectedWords(b, { summary: true }),
     ]);
     setWordCount(count);
-    setWords(firstPage);
-    setWordsLoading(false);
-
-    const allData = await getAllSelectedWords(b);
     setWords(allData);
-    setWordCount(allData.length);
-    setWordsFullyLoaded(true);
+    setWordsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -192,8 +190,29 @@ export default function ParentPage() {
     loadWords();
   }
 
-  function toggleWord(id) {
-    setExpandedWords((prev) => ({ ...prev, [id]: !prev[id] }));
+  function toggleWord(w) {
+    const id = w.id;
+    const opening = !expandedWords[id];
+    setExpandedWords((prev) => ({ ...prev, [id]: opening }));
+
+    if (opening && !w._detailLoaded && !detailFetchRef.current.has(id)) {
+      detailFetchRef.current.add(id);
+      setDetailLoadingId(id);
+      fetchParentWordDetail(w)
+        .then((full) => {
+          setWords((prev) =>
+            prev.map((x) => (x.id === id ? { ...full, _detailLoaded: true } : x))
+          );
+        })
+        .catch(() => {
+          setMsg("加载词卡失败");
+          setExpandedWords((prev) => ({ ...prev, [id]: false }));
+        })
+        .finally(() => {
+          detailFetchRef.current.delete(id);
+          setDetailLoadingId((cur) => (cur === id ? null : cur));
+        });
+    }
   }
 
   const filtered = useMemo(() => {
@@ -208,9 +227,10 @@ export default function ParentPage() {
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((w) =>
-        w.word.toLowerCase().includes(q) ||
-        w.meanings?.some((m) => m.meaning_cn?.includes(q))
+      list = list.filter(
+        (w) =>
+          w.word.toLowerCase().includes(q) ||
+          (w._detailLoaded && w.meanings?.some((m) => m.meaning_cn?.includes(q)))
       );
     }
     return list;
@@ -419,7 +439,7 @@ export default function ParentPage() {
             className="browser-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索单词或释义..."
+            placeholder="搜索单词；已展开的词卡可按中文释义筛选"
           />
           <div className="stage-filters">
             {STAGE_FILTERS.map((f) => (
@@ -463,7 +483,7 @@ export default function ParentPage() {
 
               return (
                 <div key={w.id} className="word-item">
-                  <div className="word-item-header" onClick={() => toggleWord(w.id)}>
+                  <div className="word-item-header" onClick={() => toggleWord(w)}>
                     <span className="word-item-arrow">{expandedWords[w.id] ? "▾" : "▸"}</span>
                     <strong className="word-item-word">{w.word}</strong>
                     <span className="phonetic">{w.phonetic}</span>
@@ -474,7 +494,9 @@ export default function ParentPage() {
                       <span className="word-source-tag">{w._source}</span>
                     )}
                     <span className="word-item-brief">
-                      {w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}
+                      {w._detailLoaded && w.meanings?.[0]?.meaning_cn
+                        ? w.meanings[0].meaning_cn.split("\n")[0]
+                        : ""}
                     </span>
                   </div>
                   <div className="word-stats-bar">
@@ -489,46 +511,56 @@ export default function ParentPage() {
                   </div>
                   {expandedWords[w.id] && (
                     <div className="word-item-detail">
-                      {total > 0 && (
-                        <div className="word-stats-detail">
-                          <span>做题 {total} 次</span>
-                          <span className="stats-correct">正确 {correct}</span>
-                          <span className="stats-wrong">错误 {wrong}</span>
-                          <span style={{ color: `hsl(${hue}, 65%, 40%)`, fontWeight: 600 }}>
-                            正确率 {Math.round(accuracy * 100)}%
-                          </span>
-                        </div>
-                      )}
-                      <div className="phonetic-row">
-                        {w.uk_phonetic && (
-                          <span className="phonetic-item">
-                            <span className="phonetic-label">UK</span>
-                            <span className="phonetic">{w.uk_phonetic}</span>
-                            <button className="audio-btn" onClick={() => playAudio(w.word, 1)} title="英音"><SpeakerIcon size={14} /></button>
-                          </span>
-                        )}
-                        {w.phonetic && (
-                          <span className="phonetic-item">
-                            <span className="phonetic-label">US</span>
-                            <span className="phonetic">{w.phonetic}</span>
-                            <button className="audio-btn" onClick={() => playAudio(w.word, 2)} title="美音"><SpeakerIcon size={14} /></button>
-                          </span>
-                        )}
-                      </div>
-                      {w.meanings?.map((m, i) => (
-                        <div key={i} className="word-item-meaning">
-                          {m.pos && <span className="pos-tag">{m.pos}</span>}
-                          <div className="meaning-lines"><MeaningLines text={m.meaning_cn} /></div>
-                          {m.example && (
-                            <div className="example-block">
-                              <p className="example-en">{m.example}</p>
-                              {m.example_cn && <p className="example-cn">{m.example_cn}</p>}
+                      {detailLoadingId === w.id ? (
+                        <p className="loading-text" style={{ padding: "12px 0", margin: 0 }}>加载词卡中…</p>
+                      ) : (
+                        <>
+                          {total > 0 && (
+                            <div className="word-stats-detail">
+                              <span>做题 {total} 次</span>
+                              <span className="stats-correct">正确 {correct}</span>
+                              <span className="stats-wrong">错误 {wrong}</span>
+                              <span style={{ color: `hsl(${hue}, 65%, 40%)`, fontWeight: 600 }}>
+                                正确率 {Math.round(accuracy * 100)}%
+                              </span>
                             </div>
                           )}
-                        </div>
-                      ))}
-                      {(!w._source || w._source === "custom") && (
-                        <button className="btn-del" onClick={() => handleDelete(w.id)}>删除此词</button>
+                          <div className="phonetic-row">
+                            {w.uk_phonetic && (
+                              <span className="phonetic-item">
+                                <span className="phonetic-label">UK</span>
+                                <span className="phonetic">{w.uk_phonetic}</span>
+                                <button className="audio-btn" onClick={() => playAudio(w.word, 1)} title="英音"><SpeakerIcon size={14} /></button>
+                              </span>
+                            )}
+                            {w.phonetic && (
+                              <span className="phonetic-item">
+                                <span className="phonetic-label">US</span>
+                                <span className="phonetic">{w.phonetic}</span>
+                                <button className="audio-btn" onClick={() => playAudio(w.word, 2)} title="美音"><SpeakerIcon size={14} /></button>
+                              </span>
+                            )}
+                          </div>
+                          {w.meanings?.length ? (
+                            w.meanings.map((m, i) => (
+                              <div key={i} className="word-item-meaning">
+                                {m.pos && <span className="pos-tag">{m.pos}</span>}
+                                <div className="meaning-lines"><MeaningLines text={m.meaning_cn} /></div>
+                                {m.example && (
+                                  <div className="example-block">
+                                    <p className="example-en">{m.example}</p>
+                                    {m.example_cn && <p className="example-cn">{m.example_cn}</p>}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="loading-text" style={{ padding: "8px 0", margin: 0, color: "#95a5a6" }}>暂无释义</p>
+                          )}
+                          {(!w._source || w._source === "custom") && (
+                            <button className="btn-del" onClick={() => handleDelete(w.id)}>删除此词</button>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -541,11 +573,8 @@ export default function ParentPage() {
               className="btn-show-more"
               onClick={() => setShowCount((c) => c + 10)}
             >
-              显示更多（还有 {filtered.length - showCount} 个{!wordsFullyLoaded ? "+" : ""}）
+              显示更多（还有 {filtered.length - showCount} 个）
             </button>
-          )}
-          {!wordsFullyLoaded && filtered.length <= showCount && words.length > 0 && (
-            <p className="loading-text" style={{ textAlign: "center", padding: 12, fontSize: 13, color: "#aaa" }}>加载剩余单词中...</p>
           )}
           </>
         )}
