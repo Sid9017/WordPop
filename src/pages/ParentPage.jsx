@@ -1,5 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { lookupWord, saveWord, getAllSelectedWords, getSelectedWordCount, deleteWord, playAudio, batchLookupWords, fetchParentWordDetail } from "../lib/api";
+import {
+  lookupWord,
+  saveWord,
+  deleteWord,
+  playAudio,
+  batchLookupWords,
+  fetchParentWordDetail,
+  getParentWordListStats,
+  getParentWordSummaryPage,
+  PARENT_LIST_PAGE_SIZE,
+} from "../lib/api";
 import { getInviteToken, getDailyNewWords, updateDailyNewWords, getSelectedBanks, updateSelectedBanks, getPronunciationPref, updatePronunciationPref } from "../lib/family";
 import { setAudioPref } from "../lib/api";
 import { SpeakerIcon } from "../components/Icons";
@@ -55,14 +65,20 @@ export default function ParentPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [bankFilter, setBankFilter] = useState("all");
   const [expandedWords, setExpandedWords] = useState({});
-  const [showCount, setShowCount] = useState(10);
+  const [listStats, setListStats] = useState({
+    cntAll: 0,
+    cntTested: 0,
+    cntUntested: 0,
+    bankCounts: {},
+  });
+  const [listTotal, setListTotal] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [dailyNew, setDailyNew] = useState(5);
   const [dailyNewSaving, setDailyNewSaving] = useState(false);
   const [sliderHint, setSliderHint] = useState("");
   const [sliderHintKey, setSliderHintKey] = useState(0);
   const [selectedBanks, setSelectedBanks] = useState(["custom"]);
   const [wordsLoading, setWordsLoading] = useState(false);
-  const [wordCount, setWordCount] = useState(null);
   const [detailLoadingId, setDetailLoadingId] = useState(null);
   const detailFetchRef = useRef(new Set());
   const [pronPref, setPronPref] = useState("us");
@@ -73,40 +89,102 @@ export default function ParentPage() {
 
   const banksRef = useRef(selectedBanks);
   banksRef.current = selectedBanks;
-
-  const loadWords = useCallback(async (banks) => {
-    const b = banks || banksRef.current;
-    setWordsLoading(true);
-    setExpandedWords({});
-    detailFetchRef.current.clear();
-    setDetailLoadingId(null);
-
-    const [count, allData] = await Promise.all([
-      getSelectedWordCount(b),
-      getAllSelectedWords(b, { summary: true }),
-    ]);
-    setWordCount(count);
-    setWords(allData);
-    setWordsLoading(false);
-  }, []);
+  const listInitRef = useRef(false);
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const loadList = useCallback(
+    async (banksOverride) => {
+      const b = banksOverride ?? selectedBanks;
+      setWordsLoading(true);
+      setExpandedWords({});
+      detailFetchRef.current.clear();
+      setDetailLoadingId(null);
+      try {
+        const [stats, page] = await Promise.all([
+          getParentWordListStats(b),
+          getParentWordSummaryPage({
+            selectedBanks: b,
+            stage: stageFilter,
+            bankSource: bankFilter,
+            search: debouncedSearch,
+            limit: PARENT_LIST_PAGE_SIZE,
+            offset: 0,
+          }),
+        ]);
+        setListStats(stats);
+        setWords(page.items);
+        setListTotal(page.totalCount);
+      } catch {
+        setMsg("加载列表失败，请确认已在 Supabase 执行词表 RPC 迁移");
+      } finally {
+        setWordsLoading(false);
+      }
+    },
+    [selectedBanks, stageFilter, bankFilter, debouncedSearch]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
       const [, banks, pref] = await Promise.all([
-        getDailyNewWords().then(setDailyNew),
+        getDailyNewWords().then((v) => {
+          if (!cancelled) setDailyNew(v);
+        }),
         getSelectedBanks(),
         getPronunciationPref(),
       ]);
+      if (cancelled) return;
       setSelectedBanks(banks);
       setPronPref(pref);
       setAudioPref(pref);
-      loadWords(banks);
+      try {
+        await loadList(banks);
+      } finally {
+        if (!cancelled) listInitRef.current = true;
+      }
     })();
-  }, [loadWords]);
+    return () => {
+      cancelled = true;
+    };
+    // 仅首屏拉 family 配置后拉表；筛选依赖见下一 effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (importTask && !importTask.active) loadWords();
-  }, [importTask?.active, loadWords]);
+    if (!listInitRef.current) return;
+    loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随筛选/搜索刷新
+  }, [stageFilter, bankFilter, debouncedSearch]);
+
+  useEffect(() => {
+    if (!listInitRef.current) return;
+    if (importTask && !importTask.active) loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importTask?.active]);
+
+  const appendPage = useCallback(async () => {
+    if (wordsLoading || words.length >= listTotal) return;
+    setWordsLoading(true);
+    try {
+      const page = await getParentWordSummaryPage({
+        selectedBanks,
+        stage: stageFilter,
+        bankSource: bankFilter,
+        search: debouncedSearch,
+        limit: PARENT_LIST_PAGE_SIZE,
+        offset: words.length,
+      });
+      setWords((prev) => [...prev, ...page.items]);
+    } catch {
+      setMsg("加载更多失败");
+    } finally {
+      setWordsLoading(false);
+    }
+  }, [wordsLoading, words.length, listTotal, selectedBanks, stageFilter, bankFilter, debouncedSearch]);
 
   const inputWords = parseInputWords(input);
   const isBatchMode = inputWords.length > 1;
@@ -146,7 +224,7 @@ export default function ParentPage() {
     if (next.length === 0) return;
     setSelectedBanks(next);
     await updateSelectedBanks(next);
-    loadWords(next);
+    await loadList(next);
   }
 
   async function handleSave() {
@@ -157,7 +235,7 @@ export default function ParentPage() {
       setMsg("已保存");
       setPreview(null);
       setInput("");
-      loadWords();
+      await loadList();
     } catch (err) {
       setMsg("保存失败: " + err.message);
     }
@@ -188,7 +266,7 @@ export default function ParentPage() {
   async function handleDelete(id) {
     if (!confirm("确定删除？")) return;
     await deleteWord(id);
-    loadWords();
+    await loadList();
   }
 
   function toggleWord(w) {
@@ -234,53 +312,15 @@ export default function ParentPage() {
     }
   }, [selectedBanks, bankFilter]);
 
-  const filtered = useMemo(() => {
-    setShowCount(10);
-    let list = words;
-    if (stageFilter !== "all") {
-      list = list.filter((w) => {
-        const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
-        const total = (p?.correct_count || 0) + (p?.wrong_count || 0);
-        return stageFilter === "tested" ? total > 0 : total === 0;
-      });
-    }
-    if (bankFilter !== "all") {
-      list = list.filter((w) => {
-        const src = w._source || "custom";
-        return bankFilter === "custom" ? src === "custom" : src === bankFilter;
-      });
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter(
-        (w) =>
-          w.word.toLowerCase().includes(q) ||
-          (w._detailLoaded && w.meanings?.some((m) => m.meaning_cn?.includes(q)))
-      );
-    }
-    return list;
-  }, [words, stageFilter, bankFilter, search]);
-
-  const stageCounts = useMemo(() => {
-    const counts = { all: words.length, tested: 0, untested: 0 };
-    for (const w of words) {
-      const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
-      const total = (p?.correct_count || 0) + (p?.wrong_count || 0);
-      if (total > 0) counts.tested++;
-      else counts.untested++;
-    }
-    return counts;
-  }, [words]);
-
-  const bankCounts = useMemo(() => {
-    const counts = { all: words.length };
-    for (const id of selectedBanks) counts[id] = 0;
-    for (const w of words) {
-      const src = w._source || "custom";
-      if (counts[src] !== undefined) counts[src]++;
-    }
-    return counts;
-  }, [words, selectedBanks]);
+  const stageCounts = {
+    all: listStats.cntAll,
+    tested: listStats.cntTested,
+    untested: listStats.cntUntested,
+  };
+  const bankCounts = { all: listStats.cntAll, ...listStats.bankCounts };
+  for (const id of selectedBanks) {
+    if (bankCounts[id] === undefined) bankCounts[id] = 0;
+  }
 
   return (
     <div className="page">
@@ -467,14 +507,14 @@ export default function ParentPage() {
       )}
 
       <div className="word-browser">
-        <h2>已添加的单词 ({wordCount != null ? wordCount : "加载中..."})</h2>
+        <h2>已添加的单词 ({wordsLoading && !words.length ? "加载中…" : listStats.cntAll})</h2>
 
         <div className="browser-toolbar">
           <input
             className="browser-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索单词；已展开的词卡可按中文释义筛选"
+            placeholder="搜索单词（仅匹配英文词形，服务端筛选）"
           />
           <div className="browser-filter-block">
             <span className="browser-filter-label">测验进度</span>
@@ -524,16 +564,18 @@ export default function ParentPage() {
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {wordsLoading && !words.length ? (
+          <p className="browser-empty">加载中…</p>
+        ) : !words.length ? (
           <p className="browser-empty">
-            {search || stageFilter !== "all" || bankFilter !== "all"
-              ? "没有匹配的单词"
-              : "还没有添加单词"}
+            {listStats.cntAll === 0
+              ? "还没有添加单词"
+              : "没有匹配的单词"}
           </p>
         ) : (
           <>
           <div className="word-list">
-            {filtered.slice(0, showCount).map((w) => {
+            {words.map((w) => {
               const prog = Array.isArray(w.progress) ? w.progress[0] : w.progress;
               const stage = prog?.stage || "testing";
               const correct = prog?.correct_count || 0;
@@ -637,12 +679,14 @@ export default function ParentPage() {
               );
             })}
           </div>
-          {filtered.length > showCount && (
+          {words.length < listTotal && (
             <button
+              type="button"
               className="btn-show-more"
-              onClick={() => setShowCount((c) => c + 10)}
+              disabled={wordsLoading}
+              onClick={() => appendPage()}
             >
-              显示更多（还有 {filtered.length - showCount} 个）
+              {wordsLoading ? "加载中…" : `显示更多（还有 ${listTotal - words.length} 个）`}
             </button>
           )}
           </>

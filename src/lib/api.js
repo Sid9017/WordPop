@@ -112,6 +112,40 @@ async function buildWordIndex() {
   return _wordIndex;
 }
 
+/** 未命中本地词库时，并行请求有道的最大并发数（避免瞬时打满代理） */
+const BATCH_LOOKUP_CONCURRENCY = 6;
+
+/**
+ * 固定并发池：按序填入 out[i]，顺序与 words 一致。
+ */
+async function fetchPool(words, concurrency, fetcher, onEachDone) {
+  const n = words.length;
+  if (n === 0) return [];
+  const out = new Array(n);
+  let next = 0;
+  let finished = 0;
+
+  async function worker() {
+    while (true) {
+      const i = next;
+      next += 1;
+      if (i >= n) break;
+      const w = words[i];
+      try {
+        out[i] = await fetcher(w);
+      } catch {
+        out[i] = null;
+      }
+      finished += 1;
+      if (onEachDone) onEachDone(finished, w);
+    }
+  }
+
+  const k = Math.min(concurrency, n);
+  await Promise.all(Array.from({ length: k }, () => worker()));
+  return out;
+}
+
 export async function batchLookupWords(wordList, onProgress) {
   const index = await buildWordIndex();
   const results = [];
@@ -129,14 +163,25 @@ export async function batchLookupWords(wordList, onProgress) {
 
   if (onProgress) onProgress({ cached: results.length, remaining: toQuery.length });
 
-  for (let i = 0; i < toQuery.length; i++) {
-    try {
-      const data = await lookupWord(toQuery[i]);
-      results.push(data);
-    } catch {
-      // word not found, skip
+  if (toQuery.length === 0) return results;
+
+  const lookupOut = await fetchPool(
+    toQuery,
+    BATCH_LOOKUP_CONCURRENCY,
+    (w) => lookupWord(w),
+    (done, currentWord) => {
+      if (onProgress) {
+        onProgress({
+          cached: results.length + done,
+          remaining: toQuery.length - done,
+          current: currentWord,
+        });
+      }
     }
-    if (onProgress) onProgress({ cached: results.length - toQuery.length + i + 1, remaining: toQuery.length - i - 1, current: toQuery[i] });
+  );
+
+  for (const data of lookupOut) {
+    if (data != null) results.push(data);
   }
 
   return results;
@@ -226,6 +271,84 @@ export async function getAllWordsSummary() {
   return all;
 }
 
+export const PARENT_LIST_PAGE_SIZE = 30;
+
+/** 家长页：合并词池后的统计（总数、测验进度、各来源词数），服务端 RPC */
+export async function getParentWordListStats(selectedBanks) {
+  const familyId = getFamilyId();
+  const { data, error } = await supabase.rpc("get_parent_word_list_stats", {
+    p_family_id: familyId,
+    p_selected_banks: selectedBanks,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    return {
+      cntAll: 0,
+      cntTested: 0,
+      cntUntested: 0,
+      bankCounts: {},
+    };
+  }
+  return {
+    cntAll: Number(row.cnt_all ?? 0),
+    cntTested: Number(row.cnt_tested ?? 0),
+    cntUntested: Number(row.cnt_untested ?? 0),
+    bankCounts: typeof row.bank_counts === "object" && row.bank_counts !== null ? row.bank_counts : {},
+  };
+}
+
+function mapParentSummaryRpcRow(row) {
+  const prog = {
+    id: row.progress_id ?? undefined,
+    correct_count: row.correct_count ?? 0,
+    wrong_count: row.wrong_count ?? 0,
+    stage: row.prog_stage || "testing",
+  };
+  return {
+    id: row.id,
+    _isBankWord: row.is_bank_word === true,
+    word: row.word,
+    phonetic: row.phonetic || "",
+    uk_phonetic: row.uk_phonetic || "",
+    image_url: "",
+    meanings: [],
+    progress: [prog],
+    _source: row.source,
+    _detailLoaded: false,
+  };
+}
+
+/**
+ * 家长页：合并 + 筛选 + 分页摘要行（无 meanings），服务端 RPC。
+ * 搜索仅匹配词形（strpos）；中文释义需在库侧扩展或展开后另查。
+ */
+export async function getParentWordSummaryPage({
+  selectedBanks,
+  stage = "all",
+  bankSource = "all",
+  search = "",
+  limit = PARENT_LIST_PAGE_SIZE,
+  offset = 0,
+}) {
+  const familyId = getFamilyId();
+  const q = (search || "").trim();
+  const { data, error } = await supabase.rpc("get_parent_word_summary_page", {
+    p_family_id: familyId,
+    p_selected_banks: selectedBanks,
+    p_stage: stage || "all",
+    p_bank_source: bankSource || "all",
+    p_search: q.length ? q : null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw error;
+  const rows = data || [];
+  const totalCount = rows.length ? Number(rows[0].total_count ?? 0) : 0;
+  const items = rows.map(mapParentSummaryRpcRow);
+  return { items, totalCount };
+}
+
 export async function getSelectedWordCount(selectedBanks) {
   const familyId = getFamilyId();
   const promises = [];
@@ -235,10 +358,11 @@ export async function getSelectedWordCount(selectedBanks) {
         .eq("family_id", familyId).then(({ count }) => count || 0)
     );
   }
-  for (const bankId of selectedBanks.filter((b) => b !== "custom")) {
+  const bankIds = selectedBanks.filter((b) => b !== "custom");
+  if (bankIds.length) {
     promises.push(
       supabase.from("bank_words").select("*", { count: "exact", head: true })
-        .eq("bank_id", bankId).then(({ count }) => count || 0)
+        .in("bank_id", bankIds).then(({ count }) => count || 0)
     );
   }
   const counts = await Promise.all(promises);
@@ -258,25 +382,44 @@ export async function getAllSelectedWords(selectedBanks, { limit, summary } = {}
     return summary ? getAllWordsSummary() : getAllWords();
   }
 
-  async function loadBankPages(bankId) {
-    const results = [];
-    let lastWord = null;
+  /**
+   * 一次 in 查询拉全量预置词，再按 bankIds 顺序、词内字母序重组。
+   * 分页用主键 id 键集（id > cursor），避免 PostgREST 的 range/offset 在深 offset 时变慢。
+   * 请求次数仍为 ceil(总行数/PAGE)（受单响应行数上限约束，无法单请求拉几万行）。
+   */
+  async function loadAllBankWordsMerged() {
+    if (!bankIds.length) return [];
     const PAGE = 1000;
+    const chunks = [];
+    let lastId = null;
     while (true) {
       let q = supabase
         .from("bank_words")
         .select(bankSelect)
-        .eq("bank_id", bankId)
-        .order("word")
+        .in("bank_id", bankIds)
+        .order("id", { ascending: true })
         .limit(PAGE);
-      if (lastWord != null) q = q.gt("word", lastWord);
-      const { data } = await q;
+      if (lastId != null) q = q.gt("id", lastId);
+      const { data, error } = await q;
+      if (error) throw error;
       if (!data?.length) break;
-      results.push(...data);
+      chunks.push(...data);
       if (data.length < PAGE) break;
-      lastWord = data[data.length - 1].word;
+      lastId = data[data.length - 1].id;
     }
-    return results;
+    const byBank = new Map(bankIds.map((id) => [id, []]));
+    for (const row of chunks) {
+      const arr = byBank.get(row.bank_id);
+      if (arr) arr.push(row);
+    }
+    for (const id of bankIds) {
+      byBank.get(id).sort((a, b) => (a.word < b.word ? -1 : a.word > b.word ? 1 : 0));
+    }
+    const ordered = [];
+    for (const id of bankIds) {
+      ordered.push(...byBank.get(id));
+    }
+    return ordered;
   }
 
   async function loadProgress() {
@@ -341,10 +484,10 @@ export async function getAllSelectedWords(selectedBanks, { limit, summary } = {}
     return all.slice(0, limit);
   }
 
-  const [customWords, progressMap, ...bankResults] = await Promise.all([
+  const [customWords, progressMap, bankWordsOrdered] = await Promise.all([
     loadCustom(),
     bankIds.length ? loadProgress() : Promise.resolve({}),
-    ...bankIds.map(loadBankPages),
+    loadAllBankWordsMerged(),
   ]);
 
   for (const w of customWords) {
@@ -356,7 +499,7 @@ export async function getAllSelectedWords(selectedBanks, { limit, summary } = {}
     );
   }
 
-  const bankWords = bankResults.flat();
+  const bankWords = bankWordsOrdered;
   for (const bw of bankWords) {
     const key = bw.word.toLowerCase();
     if (seen.has(key)) continue;
