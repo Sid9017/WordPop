@@ -53,6 +53,7 @@ export default function ParentPage() {
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
+  const [bankFilter, setBankFilter] = useState("all");
   const [expandedWords, setExpandedWords] = useState({});
   const [showCount, setShowCount] = useState(10);
   const [dailyNew, setDailyNew] = useState(5);
@@ -215,6 +216,24 @@ export default function ParentPage() {
     }
   }
 
+  const bankOrderIndex = useMemo(() => {
+    const m = {};
+    BANKS.forEach((b, i) => {
+      m[b.id] = i;
+    });
+    return m;
+  }, []);
+
+  const bankFilterTabs = useMemo(() => {
+    return [...selectedBanks].sort((a, b) => (bankOrderIndex[a] ?? 99) - (bankOrderIndex[b] ?? 99));
+  }, [selectedBanks, bankOrderIndex]);
+
+  useEffect(() => {
+    if (bankFilter !== "all" && !selectedBanks.includes(bankFilter)) {
+      setBankFilter("all");
+    }
+  }, [selectedBanks, bankFilter]);
+
   const filtered = useMemo(() => {
     setShowCount(10);
     let list = words;
@@ -223,6 +242,12 @@ export default function ParentPage() {
         const p = Array.isArray(w.progress) ? w.progress[0] : w.progress;
         const total = (p?.correct_count || 0) + (p?.wrong_count || 0);
         return stageFilter === "tested" ? total > 0 : total === 0;
+      });
+    }
+    if (bankFilter !== "all") {
+      list = list.filter((w) => {
+        const src = w._source || "custom";
+        return bankFilter === "custom" ? src === "custom" : src === bankFilter;
       });
     }
     if (search.trim()) {
@@ -234,7 +259,7 @@ export default function ParentPage() {
       );
     }
     return list;
-  }, [words, stageFilter, search]);
+  }, [words, stageFilter, bankFilter, search]);
 
   const stageCounts = useMemo(() => {
     const counts = { all: words.length, tested: 0, untested: 0 };
@@ -246,6 +271,16 @@ export default function ParentPage() {
     }
     return counts;
   }, [words]);
+
+  const bankCounts = useMemo(() => {
+    const counts = { all: words.length };
+    for (const id of selectedBanks) counts[id] = 0;
+    for (const w of words) {
+      const src = w._source || "custom";
+      if (counts[src] !== undefined) counts[src]++;
+    }
+    return counts;
+  }, [words, selectedBanks]);
 
   return (
     <div className="page">
@@ -441,25 +476,59 @@ export default function ParentPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索单词；已展开的词卡可按中文释义筛选"
           />
-          <div className="stage-filters">
-            {STAGE_FILTERS.map((f) => (
+          <div className="browser-filter-block">
+            <span className="browser-filter-label">测验进度</span>
+            <div className="stage-filters">
+              {STAGE_FILTERS.map((f) => (
+                <button
+                  type="button"
+                  key={f.value}
+                  className={`stage-filter-btn ${stageFilter === f.value ? "active" : ""}`}
+                  onClick={() => setStageFilter(f.value)}
+                >
+                  {f.label}
+                  {stageCounts[f.value] != null && (
+                    <span className="filter-count">{stageCounts[f.value] || 0}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="browser-filter-block">
+            <span className="browser-filter-label">词库来源</span>
+            <div className="stage-filters">
               <button
-                key={f.value}
-                className={`stage-filter-btn ${stageFilter === f.value ? "active" : ""}`}
-                onClick={() => setStageFilter(f.value)}
+                type="button"
+                className={`stage-filter-btn ${bankFilter === "all" ? "active" : ""}`}
+                onClick={() => setBankFilter("all")}
               >
-                {f.label}
-                {stageCounts[f.value] != null && (
-                  <span className="filter-count">{stageCounts[f.value] || 0}</span>
-                )}
+                全部词库
+                <span className="filter-count">{bankCounts.all ?? 0}</span>
               </button>
-            ))}
+              {bankFilterTabs.map((bankId) => {
+                const meta = BANKS.find((b) => b.id === bankId);
+                const label = meta?.name ?? bankId;
+                return (
+                  <button
+                    type="button"
+                    key={bankId}
+                    className={`stage-filter-btn ${bankFilter === bankId ? "active" : ""}`}
+                    onClick={() => setBankFilter(bankId)}
+                  >
+                    {label}
+                    <span className="filter-count">{bankCounts[bankId] ?? 0}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <p className="browser-empty">
-            {search || stageFilter !== "all" ? "没有匹配的单词" : "还没有添加单词"}
+            {search || stageFilter !== "all" || bankFilter !== "all"
+              ? "没有匹配的单词"
+              : "还没有添加单词"}
           </p>
         ) : (
           <>

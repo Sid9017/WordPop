@@ -112,3 +112,5 @@ FCE、CAE、CPE、ACT、PTE — 无现成公开机器可读词库，后续有数
 - 2026-03-28 - 新增本地脚本 `scripts/benchmark-added-words-api.mjs`：对 Supabase REST 做多次计时（HEAD / 嵌套 select / `bank_words` 千条页），用于区分「往返+传输」与查库体感；结论见对话记录。
 - 2026-03-28 - 家长页「已添加的单词」列表改为摘要加载：`getAllSelectedWords(..., { summary: true })` 不拉 `meanings`、预置词库 `bank_words` 不选 `meanings` 列；展开词卡时 `fetchParentWordDetail` 再请求完整释义。搜索：单词始终可搜，中文释义仅对已展开且加载完成的词卡生效。涉及文件：`src/lib/api.js`（`getAllWordsSummary`、`bankWordToSummaryRow`、`fetchParentWordDetail`、`getAllSelectedWords` 的 `summary` 参数）、`src/pages/ParentPage.jsx`。
 - 2026-03-28 - `bank_words` 分页由 `OFFSET/limit`（PostgREST `range`）改为键集分页（`order(word)` + `word.gt上一页末词`），避免深 OFFSET 越来越慢；`getQuizWords` 拉预置词库同步改为键集 + 固定 `order(word)`。可选说明文件：`supabase-migration-bank-words-index-optional.sql`。
+- 2026-03-29 - 家长页「已添加的单词」在测验进度（全部/待测试/已测试）外增加「词库来源」筛选：按当前选中的出题词库（我的词库、KET 等）显示标签与数量，可与进度、搜索组合过滤。涉及文件：`src/pages/ParentPage.jsx`、`src/index.css`。
+- 2026-03-29 - 新增脚本 `scripts/benchmark-parent-page-api.mjs`：对生产站点（默认 `https://wordpopp.netlify.app`）测量家长页相关请求耗时（HTML、有道代理、词库静态 JSON；可选 `.env` + 口令拉 Supabase 各 REST），输出 Markdown 至 `reports/`；`package.json` 增加 `npm run benchmark:parent-api`。

@@ -350,6 +350,13 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,23
 }
 .browser-search:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,231,0.1); }
 
+.browser-filter-block {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.browser-filter-label {
+  font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.04em;
+}
+
 .stage-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .stage-filter-btn {
   padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
