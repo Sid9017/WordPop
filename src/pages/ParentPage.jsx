@@ -5,6 +5,7 @@ import {
   deleteWord,
   playAudio,
   batchLookupWords,
+  prefetchWordBankIndex,
   fetchParentWordDetail,
   getParentWordListStats,
   getParentWordSummaryPage,
@@ -57,6 +58,8 @@ export default function ParentPage() {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
+  /** 批量查询进行中：逐条刷新，{ done, total, rows } */
+  const [batchRows, setBatchRows] = useState(null);
   const [words, setWords] = useState([]);
   const [msg, setMsg] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -95,6 +98,10 @@ export default function ParentPage() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => clearTimeout(t);
   }, [search]);
+
+  useEffect(() => {
+    prefetchWordBankIndex();
+  }, []);
 
   const loadList = useCallback(
     async (banksOverride) => {
@@ -195,16 +202,20 @@ export default function ParentPage() {
     setMsg("");
     setPreview(null);
     setBatchResults(null);
+    setBatchRows(null);
 
     if (isBatchMode) {
       try {
         const results = await batchLookupWords(inputWords, (progress) => {
-          setMsg(`查询中... 缓存命中 ${progress.cached}，剩余 ${progress.remaining}${progress.current ? ` (${progress.current})` : ""}`);
+          setBatchRows({ done: progress.done, total: progress.total, rows: progress.rows });
+          setMsg(`查询中 ${progress.done}/${progress.total}…`);
         });
         setBatchResults(results);
+        setBatchRows(null);
         setMsg("");
       } catch {
         setMsg("批量查询失败");
+        setBatchRows(null);
       }
     } else {
       try {
@@ -252,6 +263,7 @@ export default function ParentPage() {
     }
     startGlobalImport(newWords);
     setBatchResults(null);
+    setBatchRows(null);
     setInput("");
   }
 
@@ -429,29 +441,64 @@ export default function ParentPage() {
             disabled={loading}
           />
         </div>
-        {isBatchMode && !loading && !batchResults && (
+        {isBatchMode && !loading && !batchResults && !batchRows && (
           <p className="batch-hint">检测到 {inputWords.length} 个单词，点击查询批量导入</p>
         )}
       </div>
 
       {msg && <p className="msg">{msg}</p>}
 
-      {batchResults && (
+      {(batchRows || batchResults) && (
         <div className="batch-preview">
           <div className="batch-preview-header">
-            <h3>查询结果 ({batchResults.length} 词)</h3>
-            <button className="btn-primary" onClick={handleBatchImport}>
-              确认导入
-            </button>
-            <button className="btn-cancel" onClick={() => { setBatchResults(null); setInput(""); }}>
-              取消
-            </button>
+            <h3>
+              {batchRows
+                ? `查询中 (${batchRows.done}/${batchRows.total})`
+                : `查询结果 (${batchResults.length} 词)`}
+            </h3>
+            {!batchRows && (
+              <>
+                <button className="btn-primary" onClick={handleBatchImport}>
+                  确认导入
+                </button>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => {
+                    setBatchResults(null);
+                    setBatchRows(null);
+                    setInput("");
+                  }}
+                >
+                  取消
+                </button>
+              </>
+            )}
           </div>
           <div className="batch-word-list">
-            {batchResults.map((w) => {
-              const exists = words.some((ew) => ew.word?.toLowerCase() === w.word.toLowerCase());
+            {(batchRows?.rows ?? batchResults.map((w) => ({ word: w.word, status: "done", data: w }))).map((row, i) => {
+              const w = row.data;
+              const exists =
+                w && words.some((ew) => ew.word?.toLowerCase() === w.word?.toLowerCase());
+              const key = `${row.word}-${i}`;
+              if (row.status === "loading") {
+                return (
+                  <div key={key} className="wb-word-item wb-pending">
+                    <span className="wb-word">{row.word}</span>
+                    <span className="wb-pending-meaning">查询中…</span>
+                  </div>
+                );
+              }
+              if (row.status === "fail" || !w) {
+                return (
+                  <div key={key} className="wb-word-item wb-fail">
+                    <span className="wb-word">{row.word}</span>
+                    <span className="wb-pending-meaning">未查到该词</span>
+                  </div>
+                );
+              }
               return (
-                <div key={w.word} className={`wb-word-item ${exists ? "wb-exists" : ""}`}>
+                <div key={key} className={`wb-word-item ${exists ? "wb-exists" : ""}`}>
                   <span className="wb-word">{w.word}</span>
                   <span className="wb-phonetic">{w.usPhonetic || w.ukPhonetic}</span>
                   <span className="wb-meaning">{w.meanings?.[0]?.meaning_cn?.split("\n")[0] || ""}</span>

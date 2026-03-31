@@ -100,9 +100,9 @@ let _wordIndex = null;
 
 async function buildWordIndex() {
   if (_wordIndex) return _wordIndex;
+  const banks = await Promise.all(BANK_IDS.map((id) => loadBankData(id)));
   _wordIndex = {};
-  for (const id of BANK_IDS) {
-    const bank = await loadBankData(id);
+  for (const bank of banks) {
     if (!bank?.words) continue;
     for (const w of bank.words) {
       const key = w.word.toLowerCase();
@@ -110,6 +110,11 @@ async function buildWordIndex() {
     }
   }
   return _wordIndex;
+}
+
+/** 进入家长页等场景可调用，后台拉齐 10 个词库 JSON，首点批量查询时不再串行等文件 */
+export function prefetchWordBankIndex() {
+  return buildWordIndex().catch(() => {});
 }
 
 /** 未命中本地词库时，并行请求有道的最大并发数（避免瞬时打满代理） */
@@ -137,7 +142,7 @@ async function fetchPool(words, concurrency, fetcher, onEachDone) {
         out[i] = null;
       }
       finished += 1;
-      if (onEachDone) onEachDone(finished, w);
+      if (onEachDone) onEachDone(finished, w, out[i]);
     }
   }
 
@@ -146,45 +151,64 @@ async function fetchPool(words, concurrency, fetcher, onEachDone) {
   return out;
 }
 
+/**
+ * 批量查词。onProgress 在本地索引就绪后、以及每个有道请求完成后触发（便于逐条刷新 UI）。
+ * payload: { done, total, rows }，rows 与输入顺序一致：{ word, key, status, data }
+ */
 export async function batchLookupWords(wordList, onProgress) {
   const index = await buildWordIndex();
-  const results = [];
-  const toQuery = [];
+  const rows = [];
 
   for (const raw of wordList) {
-    const w = raw.trim().toLowerCase();
+    const trimmed = raw.trim();
+    const w = trimmed.toLowerCase();
     if (!w) continue;
-    if (index[w]) {
-      results.push(index[w]);
-    } else {
-      toQuery.push(w);
-    }
+    const hit = index[w];
+    rows.push({
+      word: trimmed,
+      key: w,
+      status: hit ? "done" : "loading",
+      data: hit || null,
+    });
   }
 
-  if (onProgress) onProgress({ cached: results.length, remaining: toQuery.length });
-
-  if (toQuery.length === 0) return results;
-
-  const lookupOut = await fetchPool(
-    toQuery,
-    BATCH_LOOKUP_CONCURRENCY,
-    (w) => lookupWord(w),
-    (done, currentWord) => {
-      if (onProgress) {
-        onProgress({
-          cached: results.length + done,
-          remaining: toQuery.length - done,
-          current: currentWord,
-        });
-      }
+  const emit = () => {
+    if (onProgress) {
+      const done = rows.filter((r) => r.status !== "loading").length;
+      onProgress({ done, total: rows.length, rows: rows.map((r) => ({ ...r })) });
     }
+  };
+
+  emit();
+
+  const keysToFetch = [...new Set(rows.filter((r) => r.status === "loading").map((r) => r.key))];
+  if (keysToFetch.length === 0) {
+    return rows.filter((r) => r.data).map((r) => r.data);
+  }
+
+  await fetchPool(
+    keysToFetch,
+    BATCH_LOOKUP_CONCURRENCY,
+    async (key) => {
+      let data = null;
+      try {
+        data = await lookupWord(key);
+      } catch {
+        data = null;
+      }
+      for (const r of rows) {
+        if (r.key === key && r.status === "loading") {
+          r.data = data;
+          r.status = data ? "done" : "fail";
+        }
+      }
+      emit();
+      return data;
+    },
+    undefined
   );
 
-  for (const data of lookupOut) {
-    if (data != null) results.push(data);
-  }
-
-  return results;
+  return rows.filter((r) => r.data).map((r) => r.data);
 }
 
 // ===== 家长：保存单词 =====

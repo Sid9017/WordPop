@@ -3,6 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { getCheckins, checkinToday, getTodayQuizDone } from "../lib/api";
 import Confetti from "../components/Confetti";
 
+/** 本地日历日 YYYY-MM-DD（勿用 toISOString：UTC 会与东八区等时区差一天） */
+function localYMD(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export default function ChildPage() {
   const navigate = useNavigate();
   const [checkins, setCheckins] = useState([]);
@@ -22,7 +30,7 @@ export default function ChildPage() {
     setCheckins(checks);
     setQuizDone(done);
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localYMD(new Date());
     const alreadyChecked = checks.includes(today);
     setCheckedIn(alreadyChecked);
 
@@ -52,7 +60,7 @@ export default function ChildPage() {
   const [monthOffset, setMonthOffset] = useState(0);
 
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = localYMD(today);
 
   const viewDate = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
   const viewYear = viewDate.getFullYear();
@@ -61,9 +69,9 @@ export default function ChildPage() {
   const firstDow = viewDate.getDay();
 
   const calendarDays = [];
+  const vm = String(viewMonth + 1).padStart(2, "0");
   for (let d = 1; d <= daysInMonth; d++) {
-    const dt = new Date(viewYear, viewMonth, d);
-    calendarDays.push(dt.toISOString().slice(0, 10));
+    calendarDays.push(`${viewYear}-${vm}-${String(d).padStart(2, "0")}`);
   }
 
   const isCurrentMonth = monthOffset === 0;

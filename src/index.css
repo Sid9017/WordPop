@@ -1154,6 +1154,20 @@ button.learn-next-btn {
 }
 .wb-word-item:hover { background: var(--bg); }
 .wb-word-item.wb-exists { opacity: 0.5; }
+.wb-word-item.wb-pending {
+  background: linear-gradient(90deg, var(--bg) 0%, rgba(155, 89, 182, 0.06) 50%, var(--bg) 100%);
+  background-size: 200% 100%;
+  animation: wb-shimmer 1.2s ease-in-out infinite;
+}
+.wb-word-item.wb-fail { opacity: 0.85; }
+.wb-pending-meaning {
+  flex: 1; font-size: 12px; color: var(--text-light); font-style: italic;
+}
+.wb-word-item.wb-fail .wb-pending-meaning { color: #c0392b; font-style: normal; }
+@keyframes wb-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 .wb-word { font-weight: 600; min-width: 100px; }
 .wb-phonetic { color: var(--text-light); font-size: 12px; min-width: 80px; }
 .wb-meaning { flex: 1; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
